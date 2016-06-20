@@ -354,7 +354,8 @@ metric, in general.
 
 ## Rotating route announcement start points
 
-Babel protocol messages are isotonic within a packet, and packets can be
+Babel protocol messages are self-referencing within a packet but not outside
+of one, and packets can be
 delivered in any order. Larger updates can suffer from "tail loss", and
 the starting point for a routing update could rotate to ensure more
 route changes are propagated at different times in the stream.
