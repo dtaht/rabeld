@@ -8,7 +8,8 @@ definitive.
 
 The overall intent of this document is to improve babel to work faster
 and integrate better over more layer 2 transports (802.11a[c,x,d],
-802.11n fiber, ethernet, usbnet, tunnels, powerline).
+802.11n fiber, ethernet, usbnet, tunnels, powerline), and scale
+to larger numbers of interoperable nodes and networks.
 
 ## The case for minimizing multicast
 
@@ -50,7 +51,7 @@ request for wakeups in the first place.
 
 ## Unicast IHU
 
-Is already added and works transparently with the default babel daemons.
+Is already added in this repo and works transparently with the default babel daemons.
 
 ## Unicast routing table updates
 
@@ -96,7 +97,9 @@ Unicast Hello option is not required for much of the potential benefit.
 
 If I had any one goal here it would be to reduce the time to detect a
 failed link to below a typical TCP RTO (250-1sec). Being down for longer than
-that causes more traffic.
+that causes more traffic. Other goals (not necessarily with babel), would
+be to have an IGP with enough of the same characteristics of BGP to
+scale to city-wide networks.
 
 # Accellerated link recovery and monitoring
 
@@ -158,8 +161,8 @@ Modern wired networks have
 . Alerting Rabel to to these, where exposed by the switching
 infrastructure, would be a goodness.
 
-There are also other means of detecting a link down (in wifi,
-disassociation, a variety of means in tunnels) that are faster than
+There are also other means of detecting a link down or up (in wifi AP/STA mode,
+disassociation, a variety of means in tunnels and ethernet) that are faster than
 babel's usual basic metrics.
 
 ## Atomic updates
