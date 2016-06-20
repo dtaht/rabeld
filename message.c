@@ -1608,6 +1608,7 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     int ll;
     int send_rtt_data;
     int msglen;
+    int rc;
 
     if(neigh == NULL && ifp == NULL) {
         struct interface *ifp_aux;
@@ -1638,12 +1639,8 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     rxcost = neighbour_rxcost(neigh);
     interval = (ifp->hello_interval * 3 + 9) / 10;
 
-    /* Conceptually, an IHU is a unicast message.  We usually send them as
-       multicast, since this allows aggregation into a single packet and
-       avoids an ARP exchange.  If we already have a unicast message queued
-       for this neighbour, however, we might as well piggyback the IHU. */
     debugf("Sending %sihu %d on %s to %s.\n",
-           unicast_neighbour == neigh ? "unicast " : "",
+           "unicast ",
            rxcost,
            neigh->ifp->name,
            format_address(neigh->address));
@@ -1663,44 +1660,24 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
        optional 10-bytes sub-TLV for timestamps (used to compute a RTT). */
     msglen = (ll ? 14 : 22) + (send_rtt_data ? 10 : 0);
 
-    if(unicast_neighbour != neigh) {
-        start_message(ifp, MESSAGE_IHU, msglen);
-        accumulate_byte(ifp, ll ? 3 : 2);
-        accumulate_byte(ifp, 0);
-        accumulate_short(ifp, rxcost);
-        accumulate_short(ifp, interval);
-        if(ll)
-            accumulate_bytes(ifp, neigh->address + 8, 8);
-        else
-            accumulate_bytes(ifp, neigh->address, 16);
-        if(send_rtt_data) {
-            accumulate_byte(ifp, SUBTLV_TIMESTAMP);
-            accumulate_byte(ifp, 8);
-            accumulate_int(ifp, neigh->hello_send_us);
-            accumulate_int(ifp, time_us(neigh->hello_rtt_receive_time));
-        }
-        end_message(ifp, MESSAGE_IHU, msglen);
-    } else {
-        int rc;
-        rc = start_unicast_message(neigh, MESSAGE_IHU, msglen);
-        if(rc < 0) return;
-        accumulate_unicast_byte(neigh, ll ? 3 : 2);
-        accumulate_unicast_byte(neigh, 0);
-        accumulate_unicast_short(neigh, rxcost);
-        accumulate_unicast_short(neigh, interval);
-        if(ll)
-            accumulate_unicast_bytes(neigh, neigh->address + 8, 8);
-        else
-            accumulate_unicast_bytes(neigh, neigh->address, 16);
-        if(send_rtt_data) {
-            accumulate_unicast_byte(neigh, SUBTLV_TIMESTAMP);
-            accumulate_unicast_byte(neigh, 8);
-            accumulate_unicast_int(neigh, neigh->hello_send_us);
-            accumulate_unicast_int(neigh,
-                                   time_us(neigh->hello_rtt_receive_time));
-        }
-        end_unicast_message(neigh, MESSAGE_IHU, msglen);
+    rc = start_unicast_message(neigh, MESSAGE_IHU, msglen);
+    if(rc < 0) return;
+    accumulate_unicast_byte(neigh, ll ? 3 : 2);
+    accumulate_unicast_byte(neigh, 0);
+    accumulate_unicast_short(neigh, rxcost);
+    accumulate_unicast_short(neigh, interval);
+    if(ll)
+        accumulate_unicast_bytes(neigh, neigh->address + 8, 8);
+    else
+        accumulate_unicast_bytes(neigh, neigh->address, 16);
+    if(send_rtt_data) {
+        accumulate_unicast_byte(neigh, SUBTLV_TIMESTAMP);
+        accumulate_unicast_byte(neigh, 8);
+        accumulate_unicast_int(neigh, neigh->hello_send_us);
+        accumulate_unicast_int(neigh,
+                               time_us(neigh->hello_rtt_receive_time));
     }
+    end_unicast_message(neigh, MESSAGE_IHU, msglen);
 }
 
 /* Send IHUs to all marginal neighbours */
