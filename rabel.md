@@ -337,6 +337,18 @@ on-going testing of whether or not it can be used at all can be
 leveraged by periodically marking hello and IHU traffic with CS6,
 and observing the results.
 
+## Making diversity routing work better
+
+In the absence of explicit diversity routing information supplied by
+the protocol, the z3 algorithm assumes that a given route is interfering,
+even if the interface over which a route is learned is obviously not
+(usbnet), or probably not (ethernet).
+
+Diversity routing also does not take into account (presently) the number
+of ways channels can be combined in the various wifi standards. HT20
+covers 4 channels, HT40, 8, HT80, up to 2 sets of 4 channels, and so on.
+
+
 ## Decreasing the fixed diameter estimate
 
 The default "hold time" for route retractions and blackholing is
