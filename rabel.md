@@ -387,6 +387,10 @@ A AE type notice of various "filtered and coalesed" might help narrow
 down the problems when a covering route is a generated entity between
 two DV nodes.
 
+Going further, it might be possible to require that all p2p routes have a
+"responsible router" with a covering /64 that would be exported by
+default elsewhere instead.
+
 ## Reducing the kernel RIB size especially for p2p routes.
 
 While individual babel instances can be configured to not export
@@ -436,3 +440,10 @@ the codebase.
 
 Entirely removing multicast from the protocol seems possible with
 an alternate means of connection establishment.
+
+## fixme -daemon only
+
+Promiscuus interface acquisition and/or globbing would be helpful where
+interfaces (wifi, usb, vpn) come and go frequently
+
+
