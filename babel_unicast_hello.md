@@ -22,7 +22,7 @@ and fallback.
 Unicast hellos do not need to carry the "I am unicast" capable flag,
 in fact they could take on another format entirely.
 
-## Alternative Paths
+## Alternative Approaches that are a PITA
 
 * Explicit extension of the main tlvs
 
