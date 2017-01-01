@@ -916,6 +916,15 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
+void debug_metric(int metric, int newmetric) {
+        if(newmetric == KERNEL_INFINITY) {
+	perror("Going infinite");
+	}
+	if(metric == KERNEL_INFINITY) {
+	perror("Coming from infinite");
+	}
+}
+
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -966,26 +975,49 @@ kernel_route(int operation, int table,
         if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
            newifindex == ifindex)
             return 0;
-        /* It would be better to add the new route before removing the
-           old one, to avoid losing packets.  However, this causes
-           problems with non-multipath kernels, which sometimes
-           silently fail the request, causing "stuck" routes.  Let's
-           stick with the naive approach, and hope that the window is
-           small enough to be negligible. */
-        kernel_route(ROUTE_FLUSH, table, dest, plen,
+
+        /* Add the new route before removing the old one, to avoid losing
+           packets. It is hard to do this atomically, so we essentially do
+           a two phase commit here and special casing moving to INFINITY
+           as that generally contains no info.
+
+	   here */
+	if(newmetric != KERNEL_INFINITY) {
+        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
+                          src, src_plen,
+                          newgate, newifindex, newmetric+1,
+                          NULL, 0, 0, 0);
+        if(rc < 0) {
+		perror("First add failed");
+               /* Error handling is hard. */
+        }
+	}
+        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
                      NULL, 0, 0, 0);
+        if(rc < 0) {
+		perror("First route flush failed");
+	}
+
         rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
                           src, src_plen,
                           newgate, newifindex, newmetric,
                           NULL, 0, 0, 0);
+
         if(rc < 0) {
-            if(errno == EEXIST)
-                rc = 1;
-            /* Should we try to re-install the flushed route on failure?
-               Error handling is hard. */
-        }
+		perror("route re-add failed");
+	}
+
+	if(newmetric != KERNEL_INFINITY) {
+        rc = kernel_route(ROUTE_FLUSH, newtable, dest, plen,
+                          src, src_plen,
+                          newgate, newifindex, newmetric+1,
+                          NULL, 0, 0, 0);
+        if(rc < 0) {
+		perror("Second route flush failed");
+	}
+	}
         return rc;
     }
 
