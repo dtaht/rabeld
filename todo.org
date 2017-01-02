@@ -72,7 +72,7 @@ Presently it just inserts all interfaces at the end in random order,
 insert instead based on:
            if( !(ifp->flags & IF_WIRELESS)) 
 
-* deal with kernel installed routes better
+* TODO deal with kernel installed routes better
 
 As ghu is my witness, I have no idea what is supposed to happen
 to 172.26.130.2 here:
