@@ -1,8 +1,15 @@
-* TODO local_link_suppress
+* DONE never lose packets on switching to a better route
+Changing things atomically at the kernel would be better than what I just
+did but...
 
+* TODO local_link_suppress
 ** Do not install local routes for local links where a covering link exists.
 
 Example: 172.26.16.0/24 is my local link - don't install routes for 16.1, 16.5, etc
+
+Doing the extra work to do this here saves work on every packet. Also, it
+allows better fallback to other mechanisms. Lets say DHCP is failing... 
+unreachable makes dhcp directed unicast fail when it needn't.
 
 ** Do not export local routes for local links where the covering route exists
 
@@ -10,25 +17,23 @@ No point in advertising new routes when a covering route exists on the interface
 
 Maybe limit to routes on the interface rather than the nearest global route
 
-* Suppress ipv4 announcements entirely on links with no ipv4 address
-
+* TODO Suppress ipv4 announcements entirely on links with no ipv4 address
 It's not clear to me if we are sending ipv4 routes when there is no
 ipv4 address on the link. These would end up unreachable until an address
 arrives.
 
-* Make sure we install a good route at the getgo
+** TODO Make sure we install a good route at the getgo
+For some reason or another some routes sometimes start as unreachable.
 
 * Artificially create covering routes
-
 Put more V into the D at distance
 
 * TODO Improve babel's notion of time
-
 Babel presently uses gettimeofday, or posix clocks, and
-verify we are using it sanely.
+verify we are using it sanely. Use appropriate API for osx
+for finer grained time.
 
 ** TODO Send less frequent updates for "my routes"
-
 A source specific route from a gateway is not going to change much,
 for example. You either have one, or you don't.
 
@@ -38,33 +43,45 @@ Handle bursty loss better
 
 * TODO Reduce artifical jitter and delay
 
-Examine all calls to roughly and reduce/eliminate
-Rely on async startup to stay out of sync
-decrease hello interval
+Examine all calls to "roughly" and reduce/eliminate
+Rely on randomized async startup delay to stay out of sync
+decrease/increase hello interval dynamically
 remove rate limiter (or make it finer grained/batchy with better time)
 
 * TODO Introduce notion of loss rates
- 
+Since my last seqno from you I got X bytes, or Y packets
+
+* TODO Introduce ECN capability
+Rework packet header recv
+** Use CS6 for "urgent" data only
 * TODO Fix !@#! wireless interface channel detection
 
 This has been broken since forever and wireless diversity is a good
 metric to have.
+* TODO Rework interface detection to use globbing
+per bird. This lets us add/delete interfaces without having to reconfigure
 
 * TODO Sort interface list by type
 
-The interface list should probably update the wired link first.
+Walking the interface list should probably update the wired link first.
 This will get babel to solve for the better wired links first, particularly
 on a new start, where presently it can solve for the wireless link first,
 which is usually not what you want.
 
-Presenly it just inserts all links at the end in random order
+Presently it just inserts all interfaces at the end in random order, 
+insert instead based on:
+           if( !(ifp->flags & IF_WIRELESS)) 
 
 * deal with kernel installed routes better
 
-As ghu is my witness, I have no idea what is supposed to happen to 172.26.130.2 here:
+As ghu is my witness, I have no idea what is supposed to happen
+to 172.26.130.2 here:
 
 172.26.130.0/24 dev wlp2s0  proto kernel  scope link  src 172.26.130.10  metric 600  
-172.26.130.0/23 via 172.26.16.5 dev eno1  proto babel onlink  
-172.26.130.1 via 172.26.16.5 dev eno1  proto babel onlink  
-172.26.131.1 via 172.26.16.5 dev eno1  proto babel onlink   
+172.26.130.0/23 via 172.26.16.5 dev eno1  proto babel onlink
+172.26.130.1 via 172.26.16.5 dev eno1  proto babel onlink
+172.26.131.1 via 172.26.16.5 dev eno1  proto babel onlink
 
+* TODO convert to unicast-mostly
+
+Right now route updates are bundled with multicast hellos, not unicast ihus.
