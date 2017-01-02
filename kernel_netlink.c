@@ -916,15 +916,6 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
-void debug_metric(int metric, int newmetric) {
-        if(newmetric == KERNEL_INFINITY) {
-	perror("Going infinite");
-	}
-	if(metric == KERNEL_INFINITY) {
-	perror("Coming from infinite");
-	}
-}
-
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -982,7 +973,7 @@ kernel_route(int operation, int table,
            as that generally contains no info.
 
 	   here */
-	if(newmetric != KERNEL_INFINITY) {
+	if(newmetric < KERNEL_INFINITY - 1) {
         rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
                           src, src_plen,
                           newgate, newifindex, newmetric+1,
@@ -1009,7 +1000,7 @@ kernel_route(int operation, int table,
 		perror("route re-add failed");
 	}
 
-	if(newmetric != KERNEL_INFINITY) {
+	if(newmetric < KERNEL_INFINITY - 1) {
         rc = kernel_route(ROUTE_FLUSH, newtable, dest, plen,
                           src, src_plen,
                           newgate, newifindex, newmetric+1,
