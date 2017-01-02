@@ -1,0 +1,70 @@
+* TODO local_link_suppress
+
+** Do not install local routes for local links where a covering link exists.
+
+Example: 172.26.16.0/24 is my local link - don't install routes for 16.1, 16.5, etc
+
+** Do not export local routes for local links where the covering route exists
+
+No point in advertising new routes when a covering route exists on the interface also.
+
+Maybe limit to routes on the interface rather than the nearest global route
+
+* Suppress ipv4 announcements entirely on links with no ipv4 address
+
+It's not clear to me if we are sending ipv4 routes when there is no
+ipv4 address on the link. These would end up unreachable until an address
+arrives.
+
+* Make sure we install a good route at the getgo
+
+* Artificially create covering routes
+
+Put more V into the D at distance
+
+* TODO Improve babel's notion of time
+
+Babel presently uses gettimeofday, or posix clocks, and
+verify we are using it sanely.
+
+** TODO Send less frequent updates for "my routes"
+
+A source specific route from a gateway is not going to change much,
+for example. You either have one, or you don't.
+
+** TODO Rotate start of route update
+
+Handle bursty loss better
+
+* TODO Reduce artifical jitter and delay
+
+Examine all calls to roughly and reduce/eliminate
+Rely on async startup to stay out of sync
+decrease hello interval
+remove rate limiter (or make it finer grained/batchy with better time)
+
+* TODO Introduce notion of loss rates
+ 
+* TODO Fix !@#! wireless interface channel detection
+
+This has been broken since forever and wireless diversity is a good
+metric to have.
+
+* TODO Sort interface list by type
+
+The interface list should probably update the wired link first.
+This will get babel to solve for the better wired links first, particularly
+on a new start, where presently it can solve for the wireless link first,
+which is usually not what you want.
+
+Presenly it just inserts all links at the end in random order
+
+* deal with kernel installed routes better
+
+As ghu is my witness, I have no idea what is supposed to happen to 172.26.130.2 here:
+
+172.26.130.0/24 dev wlp2s0  proto kernel  scope link  src 172.26.130.10  metric 600  
+172.26.130.0/23 via 172.26.16.5 dev eno1  proto babel onlink  
+172.26.130.1 via 172.26.16.5 dev eno1  proto babel onlink  
+172.26.131.1 via 172.26.16.5 dev eno1  proto babel onlink   
+
