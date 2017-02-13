@@ -42,6 +42,7 @@ THE SOFTWARE.
 #include <linux/if_bridge.h>
 #include <linux/fib_rules.h>
 #include <net/if_arp.h>
+#include <sched.h>
 
 #include "babeld.h"
 #include "kernel.h"
@@ -328,9 +329,13 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
         iov.iov_len = sizeof(buf);
         len = recvmsg(nl->sock, &msg, 0);
 
+	// FIXME: This only tries twice, there are
+	// more errors than this possible, and
+	// I do rather like wait_for_fd...
+	// Cut the timeout to 10ms tho
         if(len < 0 && (errno == EAGAIN || errno == EINTR)) {
             int rc;
-            rc = wait_for_fd(0, nl->sock, 100);
+            rc = wait_for_fd(0, nl->sock, 10);
             if(rc <= 0) {
                 if(rc == 0)
                     errno = EAGAIN;
@@ -442,16 +447,24 @@ netlink_talk(struct nlmsghdr *nh)
     kdebugf("Sending seqno %d from address %p (talk)\n",
             nl_command.seqno, &nl_command.seqno);
 
+    int errors = 0;
+// formerly: 100ms timeout on kernel handling, setup of a select loop
+// Not a bad idea - the blocking context switch from the select
+// better accomplishes what I'm trying to do with yield - it's just
+// that the 100ms timeout bothers me...
+//        rc = wait_for_fd(1, nl_command.sock, 100);
+    do {
     rc = sendmsg(nl_command.sock, &msg, 0);
-    if(rc < 0 && (errno == EAGAIN || errno == EINTR)) {
-        rc = wait_for_fd(1, nl_command.sock, 100);
-        if(rc <= 0) {
-            if(rc == 0)
-                errno = EAGAIN;
-        } else {
-            rc = sendmsg(nl_command.sock, &msg, 0);
-        }
+    if(rc < 0) {
+	    errors++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case EAGAIN: sched_yield(); continue;
+	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
+			    continue;
+	    }
     }
+    } while(rc < 0 && errors < 5);
 
     if(rc < nh->nlmsg_len) {
         int saved_errno = errno;
@@ -460,7 +473,7 @@ netlink_talk(struct nlmsghdr *nh)
         return -1;
     }
 
-    rc = netlink_read(&nl_command, NULL, 1, NULL); /* ACK */
+    rc = netlink_read(&nl_command, NULL, 1, NULL); /* FIXME: Do more robust checking of the ACK */
 
     return rc;
 }
@@ -1185,7 +1198,8 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
             table = *(int*)RTA_DATA(rta);
             break;
         case RTA_EXPIRES:
-            route->expires = *(int*)RTA_DATA(rta);
+		printf("Got an expire!\n");
+		route->expires = *(int*)RTA_DATA(rta);
             break;
         default:
             break;
