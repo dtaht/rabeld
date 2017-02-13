@@ -199,9 +199,10 @@ local_notify_xroute_1(struct local_socket *s, struct xroute *xroute, int kind)
     const char *src_prefix = format_prefix(xroute->src_prefix,
                                            xroute->src_plen);
 
-    rc = snprintf(buf, 512, "%s xroute %s-%s prefix %s from %s metric %d\n",
+    rc = snprintf(buf, 512, "%s xroute %s-%s prefix %s from %s metric %d "
+			     "expires %d\n",
                   local_kind(kind), dst_prefix, src_prefix,
-                  dst_prefix, src_prefix, xroute->metric);
+                  dst_prefix, src_prefix, xroute->metric, xroute->expires);
 
     if(rc < 0 || rc >= 512)
         goto fail;
@@ -238,7 +239,8 @@ local_notify_route_1(struct local_socket *s, struct babel_route *route, int kind
 
     rc = snprintf(buf, 512,
                   "%s route %lx prefix %s from %s installed %s "
-                  "id %s metric %d refmetric %d via %s if %s\n",
+                  "id %s metric %d refmetric %d via %s "
+		  "expires %d if %s\n",
                   local_kind(kind),
                   (unsigned long)route,
                   dst_prefix, src_prefix,
@@ -246,6 +248,7 @@ local_notify_route_1(struct local_socket *s, struct babel_route *route, int kind
                   format_eui64(route->src->id),
                   route_metric(route), route->refmetric,
                   format_address(route->neigh->address),
+		  route->expires,
                   route->neigh->ifp->name);
 
     if(rc < 0 || rc >= 512)

@@ -22,10 +22,11 @@ THE SOFTWARE.
 
 struct xroute {
     unsigned char prefix[16];
-    unsigned char plen;
     unsigned char src_prefix[16];
+    unsigned char plen;    // FIXME plen is unsigned char here
     unsigned char src_plen;
-    unsigned short metric;
+    unsigned short metric; // FIXME metric is a short here?
+    int expires;
     unsigned int ifindex;
     int proto;
 };

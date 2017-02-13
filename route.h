@@ -34,6 +34,7 @@ struct babel_route {
     struct neighbour *neigh;
     unsigned char nexthop[16];
     time_t time;
+    int expires;
     unsigned short hold_time;    /* in seconds */
     unsigned short smoothed_metric; /* for route selection */
     time_t smoothed_metric_time;

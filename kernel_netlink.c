@@ -43,15 +43,16 @@ THE SOFTWARE.
 #include <linux/fib_rules.h>
 #include <net/if_arp.h>
 
-#if(__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ <= 5)
-#define RTA_TABLE 15
-#endif
-
 #include "babeld.h"
 #include "kernel.h"
 #include "util.h"
 #include "interface.h"
 #include "configuration.h"
+
+// enum only exported by linux 4.10+
+#ifndef RTA_EXPIRES
+#define RTA_EXPIRES (RTA_ENCAP+1)
+#endif 
 
 #ifndef MAX_INTERFACES
 #define MAX_INTERFACES 20
@@ -935,6 +936,7 @@ kernel_route(int operation, int table,
     struct rtattr *rta;
     int len = sizeof(buf.raw);
     int rc, ipv4, use_src = 0;
+    // const int expires = 6000;
 
     if(!nl_setup) {
         fprintf(stderr,"kernel_route: netlink not initialized.\n");
@@ -1095,6 +1097,15 @@ kernel_route(int operation, int table,
         }
     }
 
+//    PERHAPS one day push babel routes as expiring into the
+//    the kernel and periodically refresh them. This would
+//    give us a window to crash or restart in without retractions
+//    and also let us chew up compute. On the other hand, we 
+//    end up writing stuff to the kernel more often to refresh it.
+//    rta = RTA_NEXT(rta, len);
+//    rta->rta_len = RTA_LENGTH(sizeof(int));
+//    rta->rta_type = RTA_EXPIRES;
+//    memcpy(RTA_DATA(rta), &expires, sizeof(int));
     rta = RTA_NEXT(rta, len);
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
@@ -1172,6 +1183,9 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
             break;
         case RTA_TABLE:
             table = *(int*)RTA_DATA(rta);
+            break;
+        case RTA_EXPIRES:
+            route->expires = *(int*)RTA_DATA(rta);
             break;
         default:
             break;

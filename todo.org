@@ -134,8 +134,13 @@ Be more cautious about announcing addresses with short liftimes.
 This has been broken since forever and wireless diversity is a good
 metric to have.
 
-* TODO Rework interface detection to use globbing
-per bird. This lets us add/delete interfaces without having to reconfigure
+* TODO Rework interface detection to use fnmatch
+
+Per: Bird. This lets us add/delete interfaces without having to reconfigure
+
+babeld -D e* w* v*
+
+would make my life so much simpler. And introduce other problems.
 
 * TODO Sort interface list by type
 
