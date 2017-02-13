@@ -916,6 +916,12 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
+// The way this gets called is confusing
+// "newgate" is only used on a change or replace
+// otherwise add/del uses the first parameters only
+
+const int iflo = 0; // fixme find this
+
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -967,51 +973,16 @@ kernel_route(int operation, int table,
            newifindex == ifindex)
             return 0;
 
-        /* Add the new route before removing the old one, to avoid losing
-           packets. It is hard to do this atomically, so we essentially do
-           a two phase commit here and special casing moving to INFINITY
-           as that generally contains no info.
+        /* Infinite kernel routes get remapped to the lo address,
+	   so we need to use that when moving routes.
 
-	   here */
-	if(newmetric < KERNEL_INFINITY - 1) {
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric+1,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("First add failed");
-               /* Error handling is hard. */
-        }
-	}
-        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("First route flush failed");
-	}
+	   When we replace a route, use those ifaddrs instead.
 
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric,
-                          NULL, 0, 0, 0);
+	*/
 
-        if(rc < 0) {
-		perror("route re-add failed");
-	}
-
-	if(newmetric < KERNEL_INFINITY - 1) {
-        rc = kernel_route(ROUTE_FLUSH, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric+1,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("Second route flush failed");
-	}
-	}
-        return rc;
+	if(metric == KERNEL_INFINITY) ifindex = iflo;
+	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
     }
-
 
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
@@ -1019,18 +990,25 @@ kernel_route(int operation, int table,
     kdebugf("kernel_route: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
             operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : "???",
+            operation == ROUTE_FLUSH ? "flush" : 
+	    operation == ROUTE_MODIFY ? "modify" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
     /* Unreachable default routes cause all sort of weird interactions;
        ignore them. */
-    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96)))
+
+    if((metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) &&
+	    (plen == 0 || (ipv4 && plen == 96)))
         return 0;
 
     memset(buf.raw, 0, sizeof(buf.raw));
+
     if(operation == ROUTE_ADD) {
         buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+        buf.nh.nlmsg_type = RTM_NEWROUTE;
+    } else if(operation == ROUTE_MODIFY) {
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
         buf.nh.nlmsg_type = RTM_NEWROUTE;
     } else {
         buf.nh.nlmsg_flags = NLM_F_REQUEST;
@@ -1044,6 +1022,7 @@ kernel_route(int operation, int table,
         rtm->rtm_src_len = src_plen;
     rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;
+// not sure if I worked around this right
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
@@ -1096,6 +1075,55 @@ kernel_route(int operation, int table,
     } else {
         *(int*)RTA_DATA(rta) = -1;
     }
+
+    if(operation == ROUTE_MODIFY) {
+    if(ipv4) {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
+    } else {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
+        if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_SRC;
+            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
+        }
+    }
+
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = newifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), newgate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), newgate, sizeof(struct in6_addr));
+        }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
+    }
+
+
+    }
+
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
     return netlink_talk(&buf.nh);
