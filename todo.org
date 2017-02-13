@@ -44,15 +44,23 @@ Maybe limit to routes on the interface rather than the nearest global route
 Is there a way to see what routes have significant traffic?
 ** Increase the announcement time when it's outside the scope of the rate limiter
 ** Use expires timers in the kernel to save on doing updates to it
-** Routing table of death
-** Use ipset facility in kernel to compress routes
+** TODO automate and examine Routing table of death
+   Profile the code for hotspots
+   Profile the network for misbehaviors
+** Use ipset facility in kernel to compress routes?
 ** Rate Limit using tcp friendly methods
 * TODO Suppress ipv4 announcements entirely on links with no ipv4 address
+
 It's not clear to me if we are sending ipv4 routes when there is no
 ipv4 address on the link. These would end up unreachable until an address
 arrives.
+
+* TODO
+
+be more anal and consistent when competing with dhcp, dhpv6, ra, etc
+about route metrics.
+
 ** DONE If we lost a link layer address, we got stuck in a bad state
-** 
 
 ** TODO Make sure we install a good route at the getgo
 For some reason or another some routes sometimes start as unreachable.
@@ -62,6 +70,7 @@ Don't start off a route as unreachable.
 Put more V into the D at distance
 
 * TODO Improve babel's notion of time
+
 Babel presently uses gettimeofday, or posix clocks, and
 verify we are using it sanely. Use appropriate API for osx
 for finer grained time.
@@ -83,14 +92,48 @@ remove rate limiter (or make it finer grained/batchy with better time)
 
 * TODO Introduce notion of loss rates
 Since my last seqno from you I got X bytes, or Y packets
+* TODO Be more aware of APs
+
+Let's say I connect to an AP at the same time over two interfaces
+what happens?
+
+What if I'm one hop further away?
+
+pc - router - router - apwifi - other station
+|
+---------------------- apwifi - other station
+
+What happens currently is the wifi link wins,
+even though we are broadcasting essentially 
+twice over the wifi medium.
+
+A potential fix is to maltreat non-meshy
+wifi connections
+more from a metric increase.
 
 * TODO Introduce ECN capability
 Rework packet header recv
+
+There are ton of other path metrics - rssadv, etc,
+that I'd espcially like to get from the default gateway
+
+That julius would hate me for adding to the routing protocol -
+but that is where those metrics are stored - and in particular,
+finding *SOME WAYS* to limit outbound iw10 to sanity - be it
+in the routing protocol or in prefix assignment is on my mind.
+
+* Probe for and use expiring routes
+
+use expires to deal with me crashing or running out of cpu
+use expires to chose between better routes provided to me.
+
+Be more cautious about announcing addresses with short liftimes.
 ** Use CS6 for "urgent" data only
 * TODO Fix !@#! wireless interface channel detection
 
 This has been broken since forever and wireless diversity is a good
 metric to have.
+
 * TODO Rework interface detection to use globbing
 per bird. This lets us add/delete interfaces without having to reconfigure
 
@@ -118,7 +161,9 @@ to 172.26.130.2 here:
 * TODO convert to unicast-mostly
 
 Right now route updates are bundled with multicast hellos, not unicast ihus.
-** Noise framework
+
+** Noise framework?
+
 ** aggregation
 
 Hence, if a previously deaggregated prefix becomes
@@ -148,13 +193,3 @@ ved for an extended period of time,
    requests (Section 3.8.1.1), this will usually result in either the
    route being refreshed or a retraction being received.
 
-
-Think about traits - in general - 
-
-online...
-
-meredith patterson provably correct parser
-
-peltier 
-
-split-horizon
