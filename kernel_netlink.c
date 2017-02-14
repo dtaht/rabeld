@@ -998,8 +998,8 @@ kernel_route(int operation, int table,
 
 	*/
 
-//	if(metric == KERNEL_INFINITY) ifindex = iflo;
-//	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
+	if(metric == KERNEL_INFINITY) ifindex = iflo;
+	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
     }
 
     ipv4 = v4mapped(gate);
@@ -1126,8 +1126,8 @@ kernel_route(int operation, int table,
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
 
-    if(metric < KERNEL_INFINITY) {
-        *(int*)RTA_DATA(rta) = metric;
+    if(newmetric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = newmetric;
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_OIF;

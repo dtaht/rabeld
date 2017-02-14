@@ -1,3 +1,20 @@
+* a more encouraging error
+
+
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+
+
+* yesterday
 Each sample counts as 0.01 seconds.
   %   cumulative   self              self     total
  time   seconds   seconds    calls  ms/call  ms/call  name
