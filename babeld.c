@@ -1075,7 +1075,7 @@ dump_route(FILE *out, struct babel_route *route)
     }
 
     fprintf(out, "%s%s%s metric %d (%d) refmetric %d id %s "
-            "seqno %d%s age %d via %s neigh %s%s%s%s\n",
+            "seqno %d%s age %d via %s expires %d neigh %s%s%s%s\n",
             format_prefix(route->src->prefix, route->src->plen),
             route->src->src_plen > 0 ? " from " : "",
             route->src->src_plen > 0 ?
@@ -1086,6 +1086,7 @@ dump_route(FILE *out, struct babel_route *route)
             channels,
             (int)(now.tv_sec - route->time),
             route->neigh->ifp->name,
+	    route->expires,
             format_address(route->neigh->address),
             nexthop ? " nexthop " : "",
             nexthop ? format_address(nexthop) : "",
@@ -1096,12 +1097,12 @@ dump_route(FILE *out, struct babel_route *route)
 static void
 dump_xroute(FILE *out, struct xroute *xroute)
 {
-    fprintf(out, "%s%s%s metric %d (exported)\n",
+    fprintf(out, "%s%s%s metric %d expires %d (exported)\n",
             format_prefix(xroute->prefix, xroute->plen),
             xroute->src_plen > 0 ? " from " : "",
             xroute->src_plen > 0 ?
             format_prefix(xroute->src_prefix, xroute->src_plen) : "",
-            xroute->metric);
+            xroute->metric, xroute->expires);
 }
 
 static void

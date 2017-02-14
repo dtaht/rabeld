@@ -237,6 +237,15 @@ check_link_local_addresses(struct interface *ifp)
             ifp->numll = 0;
             ifp->ll = NULL;
         }
+	/* If we have a ipv4 address, flush that too to confuse babel less */
+        if(ifp->ipv4) {
+            debugf("Lost ipv6 link local must wipe ipv4 also for %s.\n",
+		    ifp->name);
+            flush_interface_routes(ifp, 0);
+            free(ifp->ipv4);
+            ifp->ipv4 = NULL;
+        }
+        ifp->flags &= ~IF_UP;
         local_notify_interface(ifp, LOCAL_CHANGE);
         /* Most probably DAD hasn't finished yet.  Reschedule us
            real soon. */

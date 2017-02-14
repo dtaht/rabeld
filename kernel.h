@@ -27,14 +27,15 @@ THE SOFTWARE.
 
 struct kernel_route {
     unsigned char prefix[16];
-    int plen;
     unsigned char src_prefix[16];
+    unsigned char gw[16];
+    int plen; // FIXME: why are these ints? uchars
     int src_plen; /* no source prefix <=> src_plen == 0 */
     int metric;
     unsigned int ifindex;
-    int proto;
-    unsigned char gw[16];
-};
+    int expires;
+    int proto; // This is an unsigned char in the real world
+}; // FIXME: I would not mind aligning this on 16 byte boundaries
 
 struct kernel_addr {
     struct in6_addr addr;
@@ -46,9 +47,9 @@ struct kernel_link {
 };
 
 struct kernel_rule {
+    unsigned char src[16];
     unsigned int priority;
     unsigned int table;
-    unsigned char src[16];
     unsigned char src_plen;
 };
 

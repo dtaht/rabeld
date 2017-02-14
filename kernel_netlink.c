@@ -42,16 +42,18 @@ THE SOFTWARE.
 #include <linux/if_bridge.h>
 #include <linux/fib_rules.h>
 #include <net/if_arp.h>
-
-#if(__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ <= 5)
-#define RTA_TABLE 15
-#endif
+#include <sched.h>
 
 #include "babeld.h"
 #include "kernel.h"
 #include "util.h"
 #include "interface.h"
 #include "configuration.h"
+
+// enum only exported by linux 4.10+
+#ifndef RTA_EXPIRES
+#define RTA_EXPIRES (RTA_ENCAP+1)
+#endif 
 
 #ifndef MAX_INTERFACES
 #define MAX_INTERFACES 20
@@ -327,9 +329,13 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
         iov.iov_len = sizeof(buf);
         len = recvmsg(nl->sock, &msg, 0);
 
+	// FIXME: This only tries twice, there are
+	// more errors than this possible, and
+	// I do rather like wait_for_fd...
+	// Cut the timeout to 10ms tho
         if(len < 0 && (errno == EAGAIN || errno == EINTR)) {
             int rc;
-            rc = wait_for_fd(0, nl->sock, 100);
+            rc = wait_for_fd(0, nl->sock, 10);
             if(rc <= 0) {
                 if(rc == 0)
                     errno = EAGAIN;
@@ -441,16 +447,24 @@ netlink_talk(struct nlmsghdr *nh)
     kdebugf("Sending seqno %d from address %p (talk)\n",
             nl_command.seqno, &nl_command.seqno);
 
+    int errors = 0;
+// formerly: 100ms timeout on kernel handling, setup of a select loop
+// Not a bad idea - the blocking context switch from the select
+// better accomplishes what I'm trying to do with yield - it's just
+// that the 100ms timeout bothers me...
+//        rc = wait_for_fd(1, nl_command.sock, 100);
+    do {
     rc = sendmsg(nl_command.sock, &msg, 0);
-    if(rc < 0 && (errno == EAGAIN || errno == EINTR)) {
-        rc = wait_for_fd(1, nl_command.sock, 100);
-        if(rc <= 0) {
-            if(rc == 0)
-                errno = EAGAIN;
-        } else {
-            rc = sendmsg(nl_command.sock, &msg, 0);
-        }
+    if(rc < 0) {
+	    errors++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case EAGAIN: sched_yield(); continue;
+	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
+			    continue;
+	    }
     }
+    } while(rc < 0 && errors < 5);
 
     if(rc < nh->nlmsg_len) {
         int saved_errno = errno;
@@ -459,7 +473,7 @@ netlink_talk(struct nlmsghdr *nh)
         return -1;
     }
 
-    rc = netlink_read(&nl_command, NULL, 1, NULL); /* ACK */
+    rc = netlink_read(&nl_command, NULL, 1, NULL); /* FIXME: Do more robust checking of the ACK */
 
     return rc;
 }
@@ -916,6 +930,12 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
+// The way this gets called is confusing
+// "newgate" is only used on a change or replace
+// otherwise add/del uses the first parameters only
+
+const int iflo = 0; // fixme find this
+
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -929,6 +949,7 @@ kernel_route(int operation, int table,
     struct rtattr *rta;
     int len = sizeof(buf.raw);
     int rc, ipv4, use_src = 0;
+    // const int expires = 6000;
 
     if(!nl_setup) {
         fprintf(stderr,"kernel_route: netlink not initialized.\n");
@@ -967,51 +988,16 @@ kernel_route(int operation, int table,
            newifindex == ifindex)
             return 0;
 
-        /* Add the new route before removing the old one, to avoid losing
-           packets. It is hard to do this atomically, so we essentially do
-           a two phase commit here and special casing moving to INFINITY
-           as that generally contains no info.
+        /* Infinite kernel routes get remapped to the lo address,
+	   so we need to use that when moving routes.
 
-	   here */
-	if(newmetric < KERNEL_INFINITY - 1) {
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric+1,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("First add failed");
-               /* Error handling is hard. */
-        }
-	}
-        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("First route flush failed");
-	}
+	   When we replace a route, use those ifaddrs instead.
 
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric,
-                          NULL, 0, 0, 0);
+	*/
 
-        if(rc < 0) {
-		perror("route re-add failed");
-	}
-
-	if(newmetric < KERNEL_INFINITY - 1) {
-        rc = kernel_route(ROUTE_FLUSH, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric+1,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-		perror("Second route flush failed");
-	}
-	}
-        return rc;
+	if(metric == KERNEL_INFINITY) ifindex = iflo;
+	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
     }
-
 
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
@@ -1019,18 +1005,25 @@ kernel_route(int operation, int table,
     kdebugf("kernel_route: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
             operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : "???",
+            operation == ROUTE_FLUSH ? "flush" : 
+	    operation == ROUTE_MODIFY ? "modify" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
     /* Unreachable default routes cause all sort of weird interactions;
        ignore them. */
-    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96)))
+
+    if((metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) &&
+	    (plen == 0 || (ipv4 && plen == 96)))
         return 0;
 
     memset(buf.raw, 0, sizeof(buf.raw));
+
     if(operation == ROUTE_ADD) {
         buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+        buf.nh.nlmsg_type = RTM_NEWROUTE;
+    } else if(operation == ROUTE_MODIFY) {
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
         buf.nh.nlmsg_type = RTM_NEWROUTE;
     } else {
         buf.nh.nlmsg_flags = NLM_F_REQUEST;
@@ -1044,6 +1037,7 @@ kernel_route(int operation, int table,
         rtm->rtm_src_len = src_plen;
     rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;
+// not sure if I worked around this right
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
@@ -1096,6 +1090,64 @@ kernel_route(int operation, int table,
     } else {
         *(int*)RTA_DATA(rta) = -1;
     }
+
+    if(operation == ROUTE_MODIFY) {
+    if(ipv4) {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
+    } else {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
+        if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_SRC;
+            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
+        }
+    }
+
+//    PERHAPS one day push babel routes as expiring into the
+//    the kernel and periodically refresh them. This would
+//    give us a window to crash or restart in without retractions
+//    and also let us chew up compute. On the other hand, we 
+//    end up writing stuff to the kernel more often to refresh it.
+//    rta = RTA_NEXT(rta, len);
+//    rta->rta_len = RTA_LENGTH(sizeof(int));
+//    rta->rta_type = RTA_EXPIRES;
+//    memcpy(RTA_DATA(rta), &expires, sizeof(int));
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = newifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), newgate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), newgate, sizeof(struct in6_addr));
+        }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
+    }
+
+
+    }
+
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
     return netlink_talk(&buf.nh);
@@ -1144,6 +1196,10 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
             break;
         case RTA_TABLE:
             table = *(int*)RTA_DATA(rta);
+            break;
+        case RTA_EXPIRES:
+		printf("Got an expire!\n");
+		route->expires = *(int*)RTA_DATA(rta);
             break;
         default:
             break;

@@ -1,3 +1,26 @@
+
+https://tools.ietf.org/html/rfc4191
+* TODO If you are going to export via a proto table
+A metric might be a sane thing to always attach - otherwise you export with a 0 metric
+* Use unicast for route updates
+* Go TCP-friendly for unicast
+* Userspace RCU
+* Atomic route replace
+Unreachable routes end up going to localhost. We need to go from localhost to
+the real host on the !@#! replace.
+
+* TODO Bug:
+
+We have a metric of 0 on origin route updates, and a metric of 256 on the
+listener,
+also being announced. Should routerb be announcing via multicast it has these
+routes, or merely announcing that it hears routerA?
+* Deal with RCU
+* Solve for each interface independently
+* Fiddle with DCCP maybe?
+* Fiddle with user space RCU
+* TODO Add support for 128 bit types
+* TODO ps Deadline scheduler
 * DONE never lose packets on switching to a better route
 Changing things atomically at the kernel would be better than what I just
 did but...
@@ -17,18 +40,37 @@ No point in advertising new routes when a covering route exists on the interface
 
 Maybe limit to routes on the interface rather than the nearest global route
 
+* TODO Send most desirable routes first
+Is there a way to see what routes have significant traffic?
+** Increase the announcement time when it's outside the scope of the rate limiter
+** Use expires timers in the kernel to save on doing updates to it
+** TODO automate and examine Routing table of death
+   Profile the code for hotspots
+   Profile the network for misbehaviors
+** Use ipset facility in kernel to compress routes?
+** Rate Limit using tcp friendly methods
 * TODO Suppress ipv4 announcements entirely on links with no ipv4 address
+
 It's not clear to me if we are sending ipv4 routes when there is no
 ipv4 address on the link. These would end up unreachable until an address
 arrives.
 
+* TODO
+
+be more anal and consistent when competing with dhcp, dhpv6, ra, etc
+about route metrics.
+
+** DONE If we lost a link layer address, we got stuck in a bad state
+
 ** TODO Make sure we install a good route at the getgo
 For some reason or another some routes sometimes start as unreachable.
-
+Don't start off a route as unreachable.
+** 
 * Artificially create covering routes
 Put more V into the D at distance
 
 * TODO Improve babel's notion of time
+
 Babel presently uses gettimeofday, or posix clocks, and
 verify we are using it sanely. Use appropriate API for osx
 for finer grained time.
@@ -50,16 +92,55 @@ remove rate limiter (or make it finer grained/batchy with better time)
 
 * TODO Introduce notion of loss rates
 Since my last seqno from you I got X bytes, or Y packets
+* TODO Be more aware of APs
+
+Let's say I connect to an AP at the same time over two interfaces
+what happens?
+
+What if I'm one hop further away?
+
+pc - router - router - apwifi - other station
+|
+---------------------- apwifi - other station
+
+What happens currently is the wifi link wins,
+even though we are broadcasting essentially 
+twice over the wifi medium.
+
+A potential fix is to maltreat non-meshy
+wifi connections
+more from a metric increase.
 
 * TODO Introduce ECN capability
 Rework packet header recv
+
+There are ton of other path metrics - rssadv, etc,
+that I'd espcially like to get from the default gateway
+
+That julius would hate me for adding to the routing protocol -
+but that is where those metrics are stored - and in particular,
+finding *SOME WAYS* to limit outbound iw10 to sanity - be it
+in the routing protocol or in prefix assignment is on my mind.
+
+* Probe for and use expiring routes
+
+use expires to deal with me crashing or running out of cpu
+use expires to chose between better routes provided to me.
+
+Be more cautious about announcing addresses with short liftimes.
 ** Use CS6 for "urgent" data only
 * TODO Fix !@#! wireless interface channel detection
 
 This has been broken since forever and wireless diversity is a good
 metric to have.
-* TODO Rework interface detection to use globbing
-per bird. This lets us add/delete interfaces without having to reconfigure
+
+* TODO Rework interface detection to use fnmatch
+
+Per: Bird. This lets us add/delete interfaces without having to reconfigure
+
+babeld -D e* w* v*
+
+would make my life so much simpler. And introduce other problems.
 
 * TODO Sort interface list by type
 
@@ -85,3 +166,35 @@ to 172.26.130.2 here:
 * TODO convert to unicast-mostly
 
 Right now route updates are bundled with multicast hellos, not unicast ihus.
+
+** Noise framework?
+
+** aggregation
+
+Hence, if a previously deaggregated prefix becomes
+   aggregated, it will be unreachable for a few minutes.  This makes
+   Babel unsuitable for use in mobile networks that implement automatic
+   prefix aggregation.
+
+
+   There are two timers associated with each interface table entry --
+   the Hello timer, which governs the sending of periodic Hello and IHU
+   packets, and the update timer, which governs the sending of periodic
+   route updates.
+
+   A Babel speaker advertises to its neighbours its set of selected
+   routes.  Normally, this is done by sending one or more multicast
+   packets containing Update TLVs on all of its connected interfaces;
+   however, on link technologies where multicast is significantly more
+   expensive than unicast, a node MAY choose to send multiple copies of
+   updates in unicast packets when the number of neighbours is small.
+
+
+ved for an extended period of time,
+   causing a route to expire.  In order to avoid such spurious expiry,
+   shortly before a selected route expires, a Babel node SHOULD send a
+   unicast route request to the neighbour that advertised this route;
+   since nodes always send retractions in response to non-wildcard route
+   requests (Section 3.8.1.1), this will usually result in either the
+   route being refreshed or a retraction being received.
+

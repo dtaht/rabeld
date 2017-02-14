@@ -34,6 +34,7 @@ THE SOFTWARE.
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <sched.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -155,25 +156,24 @@ babel_send(int s,
     msg.msg_iovlen = 2;
 
     /* The Linux kernel can apparently keep returning EAGAIN indefinitely. */
-
- again:
-    rc = sendmsg(s, &msg, 0);
-    if(rc < 0) {
-        if(errno == EINTR) {
-            count++;
-            if(count < 100)
-                goto again;
-        } else if(errno == EAGAIN) {
-            int rc2;
-            rc2 = wait_for_fd(1, s, 5);
-            if(rc2 > 0) {
-                count++;
-                if(count < 100)
-                    goto again;
-            }
-            errno = EAGAIN;
+    // sendmsg can return far more than EAGAIN/INTR - ENOBUFS for example!
+    // The former version of this routine could stall for 500ms
+    // but the waitforfd idea remains better in many respects...
+    // but ultimately I'd kind of like to thread this stuff
+    do {
+        rc = sendmsg(s, &msg, 0);
+        if(rc < 0) {
+	    count++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case ENOBUFS: fprintf(stderr,"Wow, enobufs is feasible!");
+	    case EAGAIN: sched_yield(); continue;
+	    default: perror("sendmsg: kernel returned unknown error\n");
+		    continue;
+	    }
         }
     }
+    while(rc < 0 && count < 5);
     return rc;
 }
 
