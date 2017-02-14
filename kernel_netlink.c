@@ -1121,6 +1121,10 @@ kernel_route(int operation, int table,
 
 }
 
+// Work in progress
+
+#if 0
+
 int
 kernel_route2(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -1376,6 +1380,7 @@ starting off that way */
     }
     return rc;
 }
+#endif
 
 static int
 parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
