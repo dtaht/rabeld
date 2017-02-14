@@ -268,6 +268,11 @@ netlink_socket(struct netlink *nl, uint32_t groups)
             perror("setsockopt(SO_RCVBUF)");
         }
     }
+    rc = setsockopt(nl->sock, SOL_SOCKET, SO_SNDBUF,
+                        &rcvsize, sizeof(rcvsize));
+    if(rc < 0) {
+         perror("setsockopt(SO_SNDBUF)");
+        }
 
     rc = bind(nl->sock, (struct sockaddr *)&nl->sockaddr, nl->socklen);
     if(rc < 0)
@@ -312,7 +317,7 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
     int done = 0;
     int skip = 0;
 
-    char buf[8192];
+    char buf[65536];
 
     memset(&nladdr, 0, sizeof(nladdr));
     nladdr.nl_family = AF_NETLINK;
@@ -324,27 +329,25 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
     msg.msg_iovlen = 1;
 
     iov.iov_base = &buf;
-
     do {
+        int errors = 0;
         iov.iov_len = sizeof(buf);
         len = recvmsg(nl->sock, &msg, 0);
 
-	// FIXME: This only tries twice, there are
-	// more errors than this possible, and
-	// I do rather like wait_for_fd...
-	// Cut the timeout to 10ms tho
-        if(len < 0 && (errno == EAGAIN || errno == EINTR)) {
-            int rc;
-            rc = wait_for_fd(0, nl->sock, 10);
-            if(rc <= 0) {
-                if(rc == 0)
-                    errno = EAGAIN;
-            } else {
-                len = recvmsg(nl->sock, &msg, 0);
-            }
-        }
+    if(len < 0) {
+	    errors++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case ENOBUFS:
+	    case ENOMEM:
+	    case EAGAIN: sched_yield(); continue;
+	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
+			    continue;
+	    }
+    }
+     while(len < 0 && errors < 5);
 
-        if(len < 0) {
+    if(len < 0) {
             perror("netlink_read: recvmsg()");
             return -1;
         } else if(len == 0) {
@@ -454,7 +457,7 @@ netlink_talk(struct nlmsghdr *nh)
 // that the 100ms timeout bothers me...
 //        rc = wait_for_fd(1, nl_command.sock, 100);
     do {
-    rc = sendmsg(nl_command.sock, &msg, 0);
+    rc = sendmsg(nl_command.sock, &msg, MSG_DONTWAIT);
     if(rc < 0) {
 	    errors++;
 	    switch(errno) {
@@ -995,8 +998,8 @@ kernel_route(int operation, int table,
 
 	*/
 
-	if(metric == KERNEL_INFINITY) ifindex = iflo;
-	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
+//	if(metric == KERNEL_INFINITY) ifindex = iflo;
+//	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
     }
 
     ipv4 = v4mapped(gate);
@@ -1150,7 +1153,26 @@ kernel_route(int operation, int table,
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
-    return netlink_talk(&buf.nh);
+    rc = netlink_talk(&buf.nh);
+    if(rc != 0) {
+	    fprintf(stderr,"failed kernel_route: %s %s from %s "
+            "table %d metric %d dev %d nexthop %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" : 
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	    if(operation == ROUTE_MODIFY) {
+	    fprintf(stderr,"failed kernel_change: %s %s from %s "
+            "table %d metric %d dev %d nexthop %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" : 
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            newtable, newmetric, newifindex, format_address(newgate));
+	    }
+    }
+    return rc;
 }
 
 static int

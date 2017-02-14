@@ -69,8 +69,28 @@ time_us(const struct timeval t)
 int roughly(int value);
 void timeval_minus(struct timeval *d,
                    const struct timeval *s1, const struct timeval *s2);
-unsigned timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
-    ATTRIBUTE ((pure));
+
+inline unsigned timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
+    {
+    if(s1->tv_sec < s2->tv_sec)
+        return 0;
+
+    /* Avoid overflow. */
+    if(s1->tv_sec - s2->tv_sec > 2000000)
+        return 2000000000;
+
+    if(s1->tv_sec > s2->tv_sec)
+        return
+            (unsigned)((unsigned)(s1->tv_sec - s2->tv_sec) * 1000 +
+                       ((int)s1->tv_usec - s2->tv_usec) / 1000);
+
+    if(s1->tv_usec <= s2->tv_usec)
+        return 0;
+
+    return (unsigned)(s1->tv_usec - s2->tv_usec) / 1000u;
+
+}
+
 void timeval_add_msec(struct timeval *d,
                       const struct timeval *s, int msecs);
 int timeval_compare(const struct timeval *s1, const struct timeval *s2)
@@ -97,9 +117,6 @@ int parse_net(const char *net, unsigned char *prefix_r, unsigned char *plen_r,
 int parse_eui64(const char *eui, unsigned char *eui_r);
 int wait_for_fd(int direction, int fd, int msecs);
 int martian_prefix(const unsigned char *prefix, int plen) ATTRIBUTE ((pure));
-int linklocal(const unsigned char *address) ATTRIBUTE ((pure));
-int v4mapped(const unsigned char *address) ATTRIBUTE ((pure));
-void v4tov6(unsigned char *dst, const unsigned char *src);
 int daemonise(void);
 int set_src_prefix(unsigned char *src_addr, unsigned char *src_plen);
 
@@ -109,9 +126,59 @@ enum prefix_status {
     PST_MORE_SPECIFIC,
     PST_LESS_SPECIFIC
 };
-enum prefix_status
+
+// These make sense as inlines
+
+extern const unsigned char v4prefix[16];
+extern const unsigned char llprefix[16];
+
+inline int
+linklocal(const unsigned char *address)
+{
+    return memcmp(address, llprefix, 8) == 0;
+}
+
+inline int
+v4mapped(const unsigned char *address)
+{
+    return memcmp(address, v4prefix, 12) == 0;
+}
+
+inline void
+v4tov6(unsigned char *dst, const unsigned char *src)
+{
+    memcpy(dst, v4prefix, 12);
+    memcpy(dst + 12, src, 4);
+}
+
+// This less so as an inline
+
+inline enum prefix_status
 prefix_cmp(const unsigned char *p1, unsigned char plen1,
-           const unsigned char *p2, unsigned char plen2);
+           const unsigned char *p2, unsigned char plen2)
+{
+    int plen = MIN(plen1, plen2);
+
+    if(v4mapped(p1) != v4mapped(p2))
+        return PST_DISJOINT;
+
+    if(memcmp(p1, p2, plen / 8) != 0)
+        return PST_DISJOINT;
+
+    if(plen % 8 != 0) {
+        int i = plen / 8 + 1;
+        unsigned char mask = (0xFF << (plen % 8)) & 0xFF;
+        if((p1[i] & mask) != (p2[i] & mask))
+            return PST_DISJOINT;
+    }
+
+    if(plen1 < plen2)
+        return PST_LESS_SPECIFIC;
+    else if(plen1 > plen2)
+        return PST_MORE_SPECIFIC;
+    else
+        return PST_EQUALS;
+}
 
 /* If debugging is disabled, we want to avoid calling format_address
    for every omitted debugging message.  So debug is a macro.  But
