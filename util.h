@@ -37,7 +37,7 @@ THE SOFTWARE.
          _dd = htonl(_s); \
          memcpy((_d), &(_dd), 4); } while(0)
 
-static inline int
+inline int
 seqno_compare(unsigned short s1, unsigned short s2)
 {
     if(s1 == s2)
@@ -46,13 +46,13 @@ seqno_compare(unsigned short s1, unsigned short s2)
         return ((s2 - s1) & 0x8000) ? 1 : -1;
 }
 
-static inline short
+inline short
 seqno_minus(unsigned short s1, unsigned short s2)
 {
     return (short)((s1 - s2) & 0xFFFF);
 }
 
-static inline unsigned short
+inline unsigned short
 seqno_plus(unsigned short s, int plus)
 {
     return ((s + plus) & 0xFFFF);

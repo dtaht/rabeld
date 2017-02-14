@@ -1,7 +1,7 @@
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
 
-CDEBUGFLAGS = -O3 -g -pg -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
+CDEBUGFLAGS = -O3 -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
 
 DEFINES = $(PLATFORM_DEFINES)
 

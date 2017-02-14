@@ -998,10 +998,29 @@ kernel_route(int operation, int table,
 
 	*/
 
-	if(metric == KERNEL_INFINITY) ifindex = iflo;
-	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
-    }
+	/* When coming from infinity, just flush the route.
+The thing that bothers me is I'm always seeing infinite routes
+starting off that way */
 
+	if(metric == KERNEL_INFINITY) {
+	        kernel_route(ROUTE_FLUSH, table, dest, plen,
+                     src, src_plen,
+                     gate, ifindex, metric,
+                     NULL, 0, 0, 0);
+        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
+                          src, src_plen,
+                          newgate, newifindex, newmetric,
+                          NULL, 0, 0, 0);
+        if(rc < 0) {
+            if(errno == EEXIST)
+                rc = 1;
+            /* Should we try to re-install the flushed route on failure?
+               Error handling is hard. */
+        }
+        return rc;
+	}
+//	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
+    }
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
 
@@ -1023,14 +1042,15 @@ kernel_route(int operation, int table,
     memset(buf.raw, 0, sizeof(buf.raw));
 
     if(operation == ROUTE_ADD) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE | NLM_F_EXCL;
         buf.nh.nlmsg_type = RTM_NEWROUTE;
     } else if(operation == ROUTE_MODIFY) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE ;
         buf.nh.nlmsg_type = RTM_NEWROUTE;
     } else {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST;
+        buf.nh.nlmsg_flags = NLM_F_REQUEST ;
         buf.nh.nlmsg_type = RTM_DELROUTE;
+	ifindex = 0;
     }
 
     rtm = NLMSG_DATA(&buf.nh);

@@ -30,11 +30,11 @@ THE SOFTWARE.
 
 #include "babeld.h"
 #include "kernel.h"
+#include "util.h"
 #include "neighbour.h"
 #include "message.h"
 #include "route.h"
 #include "xroute.h"
-#include "util.h"
 #include "configuration.h"
 #include "interface.h"
 #include "local.h"
