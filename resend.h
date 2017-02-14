@@ -48,7 +48,7 @@ extern struct resend *to_resend;
 void
 recompute_resend_time();
 
-inline int
+static inline int
 resend_match(struct resend *resend,
              int kind, const unsigned char *prefix, unsigned char plen,
              const unsigned char *src_prefix, unsigned char src_plen)
@@ -63,7 +63,7 @@ resend_match(struct resend *resend,
 void flush_resends(struct neighbour *neigh);
 
 
-inline struct resend *
+static inline struct resend *
 find_resend(int kind, const unsigned char *prefix, unsigned char plen,
             const unsigned char *src_prefix, unsigned char src_plen,
             struct resend **previous_return)
@@ -85,7 +85,7 @@ find_resend(int kind, const unsigned char *prefix, unsigned char plen,
     return NULL;
 }
 
-inline struct resend *
+static inline struct resend *
 find_request(const unsigned char *prefix, unsigned char plen,
              const unsigned char *src_prefix, unsigned char src_plen,
              struct resend **previous_return)
@@ -100,7 +100,7 @@ int record_resend(int kind, const unsigned char *prefix, unsigned char plen,
                   const unsigned char *src_prefix, unsigned char src_plen,
                   unsigned short seqno, const unsigned char *id,
                   struct interface *ifp, int delay);
-inline int
+static inline int
 resend_expired(struct resend *resend)
 {
     switch(resend->kind) {
@@ -112,7 +112,7 @@ resend_expired(struct resend *resend)
 }
 
 
-inline int
+static inline int
 unsatisfied_request(const unsigned char *prefix, unsigned char plen,
                     const unsigned char *src_prefix, unsigned char src_plen,
                     unsigned short seqno, const unsigned char *id)
@@ -130,7 +130,7 @@ unsatisfied_request(const unsigned char *prefix, unsigned char plen,
     return 0;
 }
 
-inline int
+static inline int
 satisfy_request(const unsigned char *prefix, unsigned char plen,
                 const unsigned char *src_prefix, unsigned char src_plen,
                 unsigned short seqno, const unsigned char *id,

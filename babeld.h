@@ -44,6 +44,7 @@ THE SOFTWARE.
 #define restrict /**/
 #endif
 #else
+#error "I don't recognize this c compiler"
 #define inline /**/
 #define restrict /**/
 #endif

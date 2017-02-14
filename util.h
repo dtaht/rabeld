@@ -37,7 +37,7 @@ THE SOFTWARE.
          _dd = htonl(_s); \
          memcpy((_d), &(_dd), 4); } while(0)
 
-inline int
+static inline int
 seqno_compare(unsigned short s1, unsigned short s2)
 {
     if(s1 == s2)
@@ -46,13 +46,13 @@ seqno_compare(unsigned short s1, unsigned short s2)
         return ((s2 - s1) & 0x8000) ? 1 : -1;
 }
 
-inline short
+static inline short
 seqno_minus(unsigned short s1, unsigned short s2)
 {
     return (short)((s1 - s2) & 0xFFFF);
 }
 
-inline unsigned short
+static inline unsigned short
 seqno_plus(unsigned short s, int plus)
 {
     return ((s + plus) & 0xFFFF);
@@ -70,7 +70,7 @@ int roughly(int value);
 void timeval_minus(struct timeval *d,
                    const struct timeval *s1, const struct timeval *s2);
 
-inline unsigned timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
+static inline unsigned timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
     {
     if(s1->tv_sec < s2->tv_sec)
         return 0;
@@ -132,19 +132,19 @@ enum prefix_status {
 extern const unsigned char v4prefix[16];
 extern const unsigned char llprefix[16];
 
-inline int
+static inline int
 linklocal(const unsigned char *address)
 {
     return memcmp(address, llprefix, 8) == 0;
 }
 
-inline int
+static inline int
 v4mapped(const unsigned char *address)
 {
     return memcmp(address, v4prefix, 12) == 0;
 }
 
-inline void
+static inline void
 v4tov6(unsigned char *dst, const unsigned char *src)
 {
     memcpy(dst, v4prefix, 12);
@@ -153,7 +153,7 @@ v4tov6(unsigned char *dst, const unsigned char *src)
 
 // This less so as an inline
 
-inline enum prefix_status
+static inline enum prefix_status
 prefix_cmp(const unsigned char *p1, unsigned char plen1,
            const unsigned char *p2, unsigned char plen2)
 {

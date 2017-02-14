@@ -51,9 +51,9 @@ THE SOFTWARE.
 #include "configuration.h"
 
 // enum only exported by linux 4.10+
-#ifndef RTA_EXPIRES
-#define RTA_EXPIRES (RTA_ENCAP+1)
-#endif 
+//#ifndef RTA_EXPIRES
+//#define RTA_EXPIRES (RTA_ENCAP+1)
+//#endif 
 
 #ifndef MAX_INTERFACES
 #define MAX_INTERFACES 20
@@ -1421,10 +1421,10 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
         case RTA_TABLE:
             table = *(int*)RTA_DATA(rta);
             break;
-        case RTA_EXPIRES:
-		printf("Got an expire!\n");
-		route->expires = *(int*)RTA_DATA(rta);
-            break;
+//        case RTA_EXPIRES:
+//		printf("Got an expire!\n");
+//		route->expires = *(int*)RTA_DATA(rta);
+//            break;
         default:
             break;
         }
