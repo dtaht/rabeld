@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_ROUTE
+#define _BABEL_ROUTE
 #define DIVERSITY_NONE 0
 #define DIVERSITY_INTERFACE_1 1
 #define DIVERSITY_CHANNEL_1 2
@@ -126,3 +127,4 @@ void route_changed(struct babel_route *route,
                    struct source *oldsrc, unsigned short oldmetric);
 void route_lost(struct source *src, unsigned oldmetric);
 void expire_routes(void);
+#endif

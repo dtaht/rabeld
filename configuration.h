@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_CONFIGURATION
+#define _BABEL_CONFIGURATION
 /* Values returned by parse_config_from_string. */
 
 #define CONFIG_ACTION_DONE 0
@@ -77,3 +78,4 @@ int install_filter(const unsigned char *prefix, unsigned short plen,
                    const unsigned char *src_prefix, unsigned short src_plen,
                    struct filter_result *result);
 int finalise_config(void);
+#endif

@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_XROUTE
+#define _BABEL_XROUTE
 
 struct xroute {
     unsigned char prefix[16];
@@ -46,3 +48,4 @@ void xroute_stream_done(struct xroute_stream *stream);
 int kernel_addresses(int ifindex, int ll,
                      struct kernel_route *routes, int maxroutes);
 int check_xroutes(int send_updates);
+#endif

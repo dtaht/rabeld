@@ -19,8 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
-//#include "util.h"
+#ifndef _BABEL_RESEND
+#define _BABEL_RESEND
 #define REQUEST_TIMEOUT 65000
 #define RESEND_MAX 3
 
@@ -167,3 +167,4 @@ int request_redundant(struct interface *ifp,
 void expire_resend(void);
 void recompute_resend_time(void);
 void do_resend(void);
+#endif

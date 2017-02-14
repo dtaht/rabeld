@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_KERNEL
+#define _BABEL_KERNEL
 #include <netinet/in.h>
 #include "babeld.h"
 
@@ -110,3 +111,4 @@ int add_rule(int prio, const unsigned char *src_prefix, int src_plen,
 int flush_rule(int prio, int family);
 int change_rule(int new_prio, int old_prio, const unsigned char *src, int plen,
                 int table);
+#endif

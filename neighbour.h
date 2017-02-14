@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_NEIGHBOUR
+#define _BABEL_NEIGHBOUR
 struct neighbour {
     struct neighbour *next;
     /* This is -1 when unknown, so don't make it unsigned */
@@ -62,3 +63,4 @@ valid_rtt(struct neighbour *neigh)
 {
     return (timeval_minus_msec(&now, &neigh->rtt_time) < 180000) ? 1 : 0;
 }
+#endif

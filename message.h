@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_MESSAGE
+#define _BABEL_MESSAGE
 #define MAX_BUFFERED_UPDATES 200
 
 #define BUCKET_TOKENS_MAX 4000
@@ -109,3 +110,4 @@ void handle_request(struct neighbour *neigh, const unsigned char *prefix,
                     const unsigned char *src_prefix, unsigned char src_plen,
                     unsigned char hop_count,
                     unsigned short seqno, const unsigned char *id);
+#endif

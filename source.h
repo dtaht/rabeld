@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_SOURCE
+#define _BABEL_SOURCE
 
 #define SOURCE_GC_TIME 200
 
@@ -46,3 +48,4 @@ void update_source(struct source *src,
                    unsigned short seqno, unsigned short metric);
 void expire_sources(void);
 void check_sources_released(void);
+#endif

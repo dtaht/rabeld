@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_UTIL
+#define _BABEL_UTIL
 
 #define DO_NTOHS(_d, _s) \
     do { unsigned short _dd; \
@@ -219,6 +221,8 @@ static inline void kdebugf(const char *format, ...) { return; }
 #else
 static inline void debugf(const char *format, ...) { return; }
 static inline void kdebugf(const char *format, ...) { return; }
+#endif
+
 #endif
 
 #endif

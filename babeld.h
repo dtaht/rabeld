@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_BABELD
+#define _BABEL_BABELD
 
 #define INFINITY ((unsigned short)(~0))
 
@@ -111,3 +113,5 @@ void schedule_neighbours_check(int msecs, int override);
 void schedule_interfaces_check(int msecs, int override);
 int resize_receive_buffer(int size);
 int reopen_logfile(void);
+
+#endif
