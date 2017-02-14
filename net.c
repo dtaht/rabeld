@@ -156,24 +156,26 @@ babel_send(int s,
     msg.msg_iovlen = 2;
 
     /* The Linux kernel can apparently keep returning EAGAIN indefinitely. */
+
     // sendmsg can return far more than EAGAIN/INTR - ENOBUFS for example!
     // The former version of this routine could stall for 500ms
     // but the waitforfd idea remains better in many respects...
     // but ultimately I'd kind of like to thread this stuff
+
     do {
         rc = sendmsg(s, &msg, 0);
         if(rc < 0) {
 	    count++;
 	    switch(errno) {
 	    case EINTR: continue;
-	    case ENOBUFS: fprintf(stderr,"Wow, enobufs is feasible!");
-	    case EAGAIN: sched_yield(); continue;
+	    case ENOBUFS: fprintf(stderr,"Wow, enobufs is feasible!\n");
+	    case EAGAIN: sched_yield(); wait_for_fd(1,s,5); continue;
 	    default: perror("sendmsg: kernel returned unknown error\n");
 		    continue;
 	    }
         }
     }
-    while(rc < 0 && count < 5);
+    while(rc < 0 && count < 10);
     return rc;
 }
 

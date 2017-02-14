@@ -351,8 +351,3 @@ neighbour_cost(struct neighbour *neigh)
     return MIN(cost, INFINITY);
 }
 
-int
-valid_rtt(struct neighbour *neigh)
-{
-    return (timeval_minus_msec(&now, &neigh->rtt_time) < 180000) ? 1 : 0;
-}

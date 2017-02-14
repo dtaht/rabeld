@@ -56,4 +56,9 @@ unsigned neighbour_txcost(struct neighbour *neigh);
 unsigned neighbour_rxcost(struct neighbour *neigh);
 unsigned neighbour_rttcost(struct neighbour *neigh);
 unsigned neighbour_cost(struct neighbour *neigh);
-int valid_rtt(struct neighbour *neigh);
+
+inline int
+valid_rtt(struct neighbour *neigh)
+{
+    return (timeval_minus_msec(&now, &neigh->rtt_time) < 180000) ? 1 : 0;
+}

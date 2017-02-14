@@ -38,6 +38,13 @@ THE SOFTWARE.
 #include "babeld.h"
 #include "util.h"
 
+const unsigned char v4prefix[16] =
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
+
+const unsigned char llprefix[16] =
+    {0xFE, 0x80};
+
+
 int
 roughly(int value)
 {
@@ -62,26 +69,6 @@ timeval_minus(struct timeval *d,
     }
 }
 
-unsigned
-timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
-{
-    if(s1->tv_sec < s2->tv_sec)
-        return 0;
-
-    /* Avoid overflow. */
-    if(s1->tv_sec - s2->tv_sec > 2000000)
-        return 2000000000;
-
-    if(s1->tv_sec > s2->tv_sec)
-        return
-            (unsigned)((unsigned)(s1->tv_sec - s2->tv_sec) * 1000 +
-                       ((int)s1->tv_usec - s2->tv_usec) / 1000);
-
-    if(s1->tv_usec <= s2->tv_usec)
-        return 0;
-
-    return (unsigned)(s1->tv_usec - s2->tv_usec) / 1000u;
-}
 
 void
 timeval_add_msec(struct timeval *d, const struct timeval *s, int msecs)
@@ -245,12 +232,6 @@ normalize_prefix(unsigned char *restrict ret,
             (prefix[plen / 8] & ((0xFF << (8 - (plen % 8))) & 0xFF));
     return ret;
 }
-
-static const unsigned char v4prefix[16] =
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
-
-static const unsigned char llprefix[16] =
-    {0xFE, 0x80};
 
 const char *
 format_address(const unsigned char *address)
@@ -449,24 +430,6 @@ martian_prefix(const unsigned char *prefix, int plen)
           (plen >= 100 && (prefix[12] & 0xE0) == 0xE0)));
 }
 
-int
-linklocal(const unsigned char *address)
-{
-    return memcmp(address, llprefix, 8) == 0;
-}
-
-int
-v4mapped(const unsigned char *address)
-{
-    return memcmp(address, v4prefix, 12) == 0;
-}
-
-void
-v4tov6(unsigned char *dst, const unsigned char *src)
-{
-    memcpy(dst, v4prefix, 12);
-    memcpy(dst + 12, src, 4);
-}
 
 int
 daemonise()
@@ -490,29 +453,3 @@ daemonise()
     return 1;
 }
 
-enum prefix_status
-prefix_cmp(const unsigned char *p1, unsigned char plen1,
-           const unsigned char *p2, unsigned char plen2)
-{
-    int plen = MIN(plen1, plen2);
-
-    if(v4mapped(p1) != v4mapped(p2))
-        return PST_DISJOINT;
-
-    if(memcmp(p1, p2, plen / 8) != 0)
-        return PST_DISJOINT;
-
-    if(plen % 8 != 0) {
-        int i = plen / 8 + 1;
-        unsigned char mask = (0xFF << (plen % 8)) & 0xFF;
-        if((p1[i] & mask) != (p2[i] & mask))
-            return PST_DISJOINT;
-    }
-
-    if(plen1 < plen2)
-        return PST_LESS_SPECIFIC;
-    else if(plen1 > plen2)
-        return PST_MORE_SPECIFIC;
-    else
-        return PST_EQUALS;
-}
