@@ -1,5 +1,38 @@
-* a more encouraging error
+* Status -
 
+So I reverted the core routine back to the original, hit it with 10,000
+routes - and it got the kernel table into a bad state, but only had
+8 failures doing so. And - waiting overnight as I gave up - at some point
+after all these routes were removed - the kernel table became correct.
+
+I did only listen on eno1 this time, where before wifi was in the loop.
+
+I am beginning to smell 3 possibily interrelated bugs here:
+
+A) Kernel refusing valid route updates - or babel getting confused on what it
+injected - 
+
+B) the daemon itself getting into a state where it's announcing and responding
+more to stuff than getting itself into a good state
+
+C) the protocol wildcard stuff maybe?
+ 
+
+root@dancer:~/git/rabeld# ./babeld eno1
+Type: 0
+failed kernel_route: add fd44:0:0:bf8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add fd44:0:0:c0c::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add fd44:0:0:c4f::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: flush fd44:0:0:bf8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:c0c::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:c4f::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+
+
+
+* a more encouraging error
 
 failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
 kernel_route(MODIFY): Invalid argument
