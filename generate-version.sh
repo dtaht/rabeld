@@ -10,4 +10,4 @@ else
     version="unknown"
 fi
 
-echo "#define BABELD_VERSION \"$version\""
+echo -e "#ifndef BABELD_VERSION\n#define BABELD_VERSION \"$version\"\n#endif"
