@@ -21,17 +21,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include <string.h>
+#include <unistd.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
+#include <string.h>
+#include <getopt.h>
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
