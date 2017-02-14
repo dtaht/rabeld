@@ -1,7 +1,8 @@
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
 
-CDEBUGFLAGS = -O3 -pg -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
+#CDEBUGFLAGS = -std=c11 -O3 -pg -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
+CDEBUGFLAGS = -Wall -O3 -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
 
 DEFINES = $(PLATFORM_DEFINES)
 
@@ -13,11 +14,14 @@ SRCS = babeld.c net.c kernel.c util.c interface.c source.c neighbour.c \
        route.c xroute.c message.c resend.c configuration.c local.c \
        disambiguation.c rule.c
 
+HEADERS =
+#HEADERS := $(patsubst %.c,%.h,$(SRCS))
+#OBJS := $(patsubst %.c,%.o,$(SRCS)) 
 OBJS = babeld.o net.o kernel.o util.o interface.o source.o neighbour.o \
        route.o xroute.o message.o resend.o configuration.o local.o \
        disambiguation.o rule.o
 
-babeld: $(OBJS)
+babeld: $(OBJS) $(HEADERS) version.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -o babeld $(OBJS) $(LDLIBS)
 
 babeld.o: babeld.c version.h
@@ -29,6 +33,12 @@ kernel.o: kernel_netlink.c kernel_socket.c
 version.h:
 	./generate-version.sh > version.h
 
+babeld-whole.c: $(SRCS) version.h
+	cat $(SRCS) > babeld-whole.c
+
+babeld-whole: babeld-whole.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -fwhole-program babeld-whole.c -o babeld-whole $(LDLIBS)
+	
 .SUFFIXES: .man .html
 
 .man.html:
@@ -54,4 +64,4 @@ uninstall:
 	-rm -f $(TARGET)$(MANDIR)/man8/babeld.8
 
 clean:
-	-rm -f babeld babeld.html version.h *.o *~ core TAGS gmon.out
+	-rm -f babeld babeld-whole babeld.html version.h *.o *~ core TAGS gmon.out babeld-whole.c
