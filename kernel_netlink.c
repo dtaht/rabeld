@@ -995,18 +995,42 @@ kernel_route(int operation, int table,
            silently fail the request, causing "stuck" routes.  Let's
            stick with the naive approach, and hope that the window is
            small enough to be negligible. */
-        kernel_route(ROUTE_FLUSH, table, dest, plen,
+
+        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
                      NULL, 0, 0, 0);
+	if(rc < 0) {
+        perror("flush failed during replace");
+        fprintf(stderr,"failed kernel_route flush during replace: %s %s from %s "
+            "table %d metric %d dev %d nexthop %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	}
         rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
                           src, src_plen,
                           newgate, newifindex, newmetric,
                           NULL, 0, 0, 0);
         if(rc < 0) {
-            if(errno == EEXIST)
+         fprintf(stderr,"failed kernel_route add during replace: %s %s from %s "
+            "table %d metric %d dev %d nexthop %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	    perror("Add failed during replace");
+		if(errno == EEXIST)
                 rc = 1;
-            /* Should we try to re-install the flushed route on failure?
+		// FIXME hmm. Way more errors than this are possible
+/*		else rc = kernel_route(ROUTE_ADD, table, dest, plen,
+                     src, src_plen,
+                     gate, ifindex, metric,
+                     NULL, 0, 0, 0); */
+            /* Try to re-install the flushed route on failure.
                Error handling is hard. */
         }
         return rc;
@@ -1025,8 +1049,11 @@ kernel_route(int operation, int table,
 
     /* Unreachable default routes cause all sort of weird interactions;
        ignore them. */
-    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96)))
-        return 0;
+
+    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96))) {
+	    fprintf(stderr,"Unreachable default route!\n");
+	    return 0;
+    }
 
     memset(buf.raw, 0, sizeof(buf.raw));
     if(operation == ROUTE_ADD) {
@@ -1040,25 +1067,37 @@ kernel_route(int operation, int table,
     rtm = NLMSG_DATA(&buf.nh);
     rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
     rtm->rtm_dst_len = ipv4 ? plen - 96 : plen;
-    if(use_src)
-        rtm->rtm_src_len = src_plen;
-    rtm->rtm_table = table;
+
+    if(use_src) {
+	    if(ipv4) fprintf(stderr,"BAD: ipv4 using src: %d ????\n", src_plen - 96);
+	    rtm->rtm_src_len = ipv4 ? src_plen - 96 : plen;
+    }
+	    rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;
+
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
         rtm->rtm_type = RTN_UNREACHABLE;
     rtm->rtm_protocol = RTPROT_BABEL;
+    // I am not sure why we need ONLINK
     rtm->rtm_flags |= RTNH_F_ONLINK;
 
     rta = RTM_RTA(rtm);
 
 // strongly implies a netlink bug
+
     if(ipv4) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
+        if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_SRC;
+            memcpy(RTA_DATA(rta), src + 12, sizeof(struct in_addr));
+        }
     } else {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
@@ -1078,6 +1117,7 @@ kernel_route(int operation, int table,
 
     if(metric < KERNEL_INFINITY) {
         *(int*)RTA_DATA(rta) = metric;
+
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_OIF;
@@ -1097,22 +1137,26 @@ kernel_route(int operation, int table,
     } else {
         *(int*)RTA_DATA(rta) = -1;
     }
+
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
-    if(rtm->rtm_protocol != RTPROT_BABEL) 
+    if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
 
     rc = netlink_talk(&buf.nh);
-    if(rtm->rtm_protocol != RTPROT_BABEL) 
+
+    if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
-    if(metric < KERNEL_INFINITY && rtm->rtm_type != RTN_UNICAST ) 
+    if(metric < KERNEL_INFINITY && rtm->rtm_type != RTN_UNICAST )
 		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
- 
+    if(metric >= KERNEL_INFINITY && rtm->rtm_type != RTN_UNREACHABLE )
+		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
+
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
             operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : 
+            operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
@@ -1120,7 +1164,7 @@ kernel_route(int operation, int table,
 	    fprintf(stderr,"failed kernel_change: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
             operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : 
+            operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             newtable, newmetric, newifindex, format_address(newgate));
