@@ -1,3 +1,117 @@
+* Ironically FQ will help
+
+There is a single queue for all netlink events. This means
+that if work is backlogged on a given queue, and the interface
+goes away as it does here - we used to just hammer on the socket
+for 500ms. Now I'm only doing it for 50 (100?), but it isn't
+going toclear that fast.
+
+A "cure" would be to use select on one multicast group per idea.
+
+This might give us better ipv4 performance when ipv6 is acting up,
+it certainly will let us see interface changes faster, so instead
+of madly retrying, just return on a send failure and check to see
+if something happened elsewhere in the system
+
+For all I know this has some bearing on getting EAGAIN in the wrong place
+as documented elsewhere on the net for openvswitch.
+
+Fixing the select loop will take some work.
+
+
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+setsockopt(IPV6_JOIN_GROUP): Address already in use
+Type: 2
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+
+* OK we can still do ourselves in
+
+failed kernel_route: flush fd44:0:0:ae8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:ae9::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:aea::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:aeb::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+
+And now, great - it shows up as static
+
+root@dancer:~/git/rabeld# vi ds
+root@dancer:~/git/rabeld# ip -6 route | grep fd44:0:0:ae8::/64
+
+fd44:0:0:ae8::/64 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto static metric 1024  pref medium
+unreachable fd44:0:0:ae8::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+
+* Network Manager fear and revulsion
+
+Doesn't have a way to put in protos.
+
+Want it to use "proto dhcp" Doesn't. Totally unclear on all the
+machinery
+
+This, on the other hand, will at least give everything an overlarge
+metric.
+
+/etc/NetworkManager.conf
+
+[connections]
+ipv6.route-metric=2048
+ipv4.route-metric=2048
+
+root@dancer:/etc/NetworkManager# ip -6 route show | grep 'proto ra'
+2601:646:4101:2de0::/64 dev wlp2s0 proto ra metric 2048  pref medium
+2601:646:4101:2de0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto ra metric 2048  pref medium
+fd32:7d58:8d63::/64 dev wlp2s0 proto ra metric 2048  pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto ra metric 2048  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65113sec hoplimit 64 pref high
+
+root@dancer:/etc/NetworkManager# ip -6 route | grep default
+default from 2601:646:4101:2de0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65067sec hoplimit 64 pref high
+default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 2048  pref medium
+
+
+
+
+* So I slammed stuff to printf around the error...
+
+
+and haven't been able to duplicate it since
+
+* More
+
+
+It turns out debian distributes an old version - 1.5
+
+fd44:0:0:95a::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlan0  proto static  metric 1024
+
+
+Another chip is showing this:
+
+fd44:0:0:69::/64 via fe80::19e7:b4bd:1a5e:561a dev wlan0  proto static  metric 1024
+*
+
+fe80::3aa2:8cff:fe5d:effb is currently the source of the expired routes
+that should have expired minutes ago.
+
+but there are others
+
+add route 12b860 prefix fd44:0:0:2524::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d10b8 prefix fd44:0:0:2524::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 67098 prefix fd44:0:0:2525::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+add route 12b8b0 prefix fd44:0:0:2525::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d11a8 prefix fd44:0:0:2525::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 75068 prefix fd44:0:0:2526::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+add route 12b900 prefix fd44:0:0:2526::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d1298 prefix fd44:0:0:2526::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 78a18 prefix fd44:0:0:2527::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+
+
+
+
 * Status -
 
 So I reverted the core routine back to the original, hit it with 10,000
@@ -10,13 +124,13 @@ I did only listen on eno1 this time, where before wifi was in the loop.
 I am beginning to smell 3 possibily interrelated bugs here:
 
 A) Kernel refusing valid route updates - or babel getting confused on what it
-injected - 
+injected -
 
 B) the daemon itself getting into a state where it's announcing and responding
 more to stuff than getting itself into a good state
 
 C) the protocol wildcard stuff maybe?
- 
+
 
 root@dancer:~/git/rabeld# ./babeld eno1
 Type: 0
