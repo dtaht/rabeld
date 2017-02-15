@@ -1,3 +1,8 @@
+* printfs checking to see if stuff got spat on didn't help
+
+I can do more robust checking than I did. But I need to go
+look at the netlink bug workarounds on the web.
+
 * Ironically FQ will help
 
 There is a single queue for all netlink events. This means
