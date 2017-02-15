@@ -162,6 +162,15 @@ babel_send(int s,
     // but the waitforfd idea remains better in many respects...
     // but ultimately I'd kind of like to thread this stuff
 
+/* FIXME: when an interface goes up and down,
+
+we get:
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+*/
+
+
     do {
         rc = sendmsg(s, &msg, 0);
         if(rc < 0) {

@@ -317,7 +317,7 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
     int done = 0;
     int skip = 0;
 
-    char buf[65536];
+    char buf[65536*2];
 
     memset(&nladdr, 0, sizeof(nladdr));
     nladdr.nl_family = AF_NETLINK;
@@ -947,7 +947,7 @@ kernel_route(int operation, int table,
              const unsigned char *newgate, int newifindex,
              unsigned int newmetric, int newtable)
 {
-    union { char raw[1024]; struct nlmsghdr nh; } buf;
+    union { char raw[4096]; struct nlmsghdr nh; } buf;
     struct rtmsg *rtm;
     struct rtattr *rta;
     int len = sizeof(buf.raw);
@@ -1053,6 +1053,7 @@ kernel_route(int operation, int table,
 
     rta = RTM_RTA(rtm);
 
+// strongly implies a netlink bug
     if(ipv4) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
@@ -1098,7 +1099,15 @@ kernel_route(int operation, int table,
     }
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
+    if(rtm->rtm_protocol != RTPROT_BABEL) 
+		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
+
     rc = netlink_talk(&buf.nh);
+    if(rtm->rtm_protocol != RTPROT_BABEL) 
+		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
+    if(metric < KERNEL_INFINITY && rtm->rtm_type != RTN_UNICAST ) 
+		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
+ 
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
@@ -1358,8 +1367,13 @@ starting off that way */
     }
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
+    if(rtm->rtm_protocol != RTPROT_BABEL) 
+		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
 
     rc = netlink_talk(&buf.nh);
+    if(rtm->rtm_protocol != RTPROT_BABEL) 
+		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
+
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
             "table %d metric %d dev %d nexthop %s\n",
@@ -1834,7 +1848,7 @@ kernel_callback(struct kernel_filter *filter)
 int
 add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
 {
-    char buffer[64] = {0}; /* 56 needed */
+    char buffer[128] = {0}; /* 56 needed */
     struct nlmsghdr *message_header = (void*)buffer;
     struct rtmsg *message = NULL;
     struct rtattr *current_attribute = NULL;
@@ -1906,7 +1920,7 @@ add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
 int
 flush_rule(int prio, int family)
 {
-    char buffer[64] = {0}; /* 36 needed */
+    char buffer[128] = {0}; /* 36 needed */
     struct nlmsghdr *message_header = (void*)buffer;
     struct rtmsg *message = NULL;
     struct rtattr *current_attribute = NULL;
