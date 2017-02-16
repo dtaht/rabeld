@@ -1,9 +1,109 @@
-* Killing network manager wqas a pita
+* gcc inline intrinsics
+
+http://hardwarebug.org/2010/07/06/arm-inline-asm-secrets/
+
+* Do a graceful shutdown
+
+https://github.com/fordsfords/blink/tree/gh-pages
+
+
+* NEONCopy of 8 words at a time
+
+      VLDM r1!, {d0-d7}
+      VSTM r0!, {d0-d7}
+      SUBS r2, r2, #0x40
+      BGE NEONCopy
+
+* I AM seeing major filesystem corruption in chip-1, chip-5
+
+And sigh, temp is not ramfs either. Nearly nobody coming from debian seems to
+understand the need to never write flash. The openwrt folk had this hard lesson
+burned right into them.
+
+I will have to reflash
+
+systemctl enable tmp.mount - like that bit of magic was easier to understand
+than /etc/fstab
+
+# UNCONFIGURED FSTAB FOR BASE SYSTEM
+tmpfs /tmp tmpfs defaults 0 0
+tmpfs /var/tmp tmpfs defaults 0 0
+
+http://www.chip-community.org/index.php/Flash#Extend_life
+
+systemctl set-default multi-user.target - disable the gui
+
+** chip-1 was toast while I was doing these
+
+* Finally wrote v6_equal and got rid of memcmp
+with my luck memcmp(x,y,16) was more efficient, but I can roll a benchmark now.
+Kind of need to get better about forcing alignment elsewhere. The arm assembly
+is emitting unaligned loads...
+
+** MIPS assembly
+
+** ARM 64 bit assembly
+Have to go boot that box
+** ARM 32 bit assembly (gcc 4.9)
+To me, I'd have cleared 8 regs, loaded 4 at a time, xored each then orred them.
+A dual issue arch would have only stalled on the loads and last or. And, sigh -
+this still generates a call to a subroutine in the -Os mode, inlined with -O3
+
+        bne     .L21    @,
+        ldr     r3, [r4, #4]    @ tmp250, MEM[base: _8, offset: 4B]
+        ldr     r6, [r0, #4]    @ MEM[(const unsigned int *)prefix_12(D) + 4B], MEM[(const unsigned int *)prefix_12(D) + 4B]
+        eors    r6, r6, r3      @, D.7287, MEM[(const unsigned int *)prefix_12(D) + 4B], tmp250
+        ldr     r3, [r4]        @ tmp251, MEM[base: _8, offset: 0B]
+        mov     ip, r3  @ tmp251, tmp251
+        ldr     r3, [r0]        @ tmp252, MEM[(const unsigned int *)prefix_12(D)]
+        eor     ip, ip, r3      @ D.7287, tmp251, tmp252
+        ldr     r3, [r4, #8]    @ tmp255, MEM[base: _8, offset: 8B]
+        orr     r8, r6, ip      @ D.7287, D.7287, D.7287
+        ldr     r6, [r0, #12]   @ MEM[(const unsigned int *)prefix_12(D) + 12B], MEM[(const unsigned int *)prefix_12(D) + 12B]
+        mov     ip, r3  @ tmp255, tmp255
+        ldr     r3, [r0, #8]    @ tmp256, MEM[(const unsigned int *)prefix_12(D) + 8B]
+        eor     ip, ip, r3      @ D.7287, tmp255, tmp256
+        ldr     r3, [r4, #12]   @ tmp259, MEM[base: _8, offset: 12B]
+        orr     ip, r8, ip      @ D.7287, D.7287, D.7287
+        eors    r6, r6, r3      @, D.7287, MEM[(const unsigned int *)prefix_12(D) + 12B], tmp259
+        orrs    r3, ip, r6      @ tmp248, D.7287, D.7287
+        beq     .L21    @,
+
+** NEON assembly
+I count at least 12 clocks of processing here. No matter how bad the stall is,
+emitting a neon instruction would help...
+
+if there was some way some how to do the mov ip, neonreg, mov ip+x, neonreg,
+xor, (store it back) - bne, I free up 8 main registers for "other stuff". It
+gets even better when comparing 2 prefixes (as in find_* - 4 loads, 2 xors, an
+or, then store it back, at the cost of 4 neon registers - which fills the
+pipeline, and keeps the integer unit doing other stuff....
+
+** the x86_64 assembly makes me happy though I could be delusional
+It looks like it doesn't manage to keep the core prefix in a reg while walking 
+the pointer tree in find_* and not spill. But still - WAY better than memcmp
+I think.
+
+        movq    16(%r8), %r11   # MEM[base: _9, offset: 16B], MEM[base: _9, offset: 16B]
+        movq    24(%r8), %r10   # MEM[base: _9, offset: 24B], MEM[base: _9, offset: 24B]
+        xorq    (%rdx), %r11    # MEM[(const long unsigned int *)src_prefix_19(D)], D.5107
+        xorq    8(%rdx), %r10   # MEM[(const long unsigned int *)src_prefix_19(D) + 8B], D.5107
+        orq     %r10, %r11      # D.5107, tmp153
+        jne     .L21    #,
+
+
+
+* Killing network manager was a pita
+
+But it totally saved on cpu and crash.
+
+I basically did it via:
 
 wpa_supplicant -dd -Dnl80211 -iwlan0 -c /etc/wpa_supplicant/chip.conf  &
 root@chip-6:/etc/wpa_supplicant# ifconfig wlan0 up
 root@chip-6:/etc/wpa_supplicant# dhclient wlan0
 
+but in doing that I couldn't get back into the system via anything but serial.
 
 
 * On the chips, I think... in the end what's killing them
