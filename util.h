@@ -122,7 +122,8 @@ static inline int v6_equal8 (const unsigned char *p1,
 {
 #ifdef  HAVE_64BIT_ARCH
         const unsigned long *up1 = (const unsigned long *)p1;
-        return ((up1[0] ^ up2[0]) == 0UL;
+        const unsigned long *up2 = (const unsigned long *)p2;
+        return (up1[0] ^ up2[0]) == 0UL;
 #else
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
@@ -136,11 +137,13 @@ static inline int v6_equal8 (const unsigned char *p1,
 static inline int v6_equal12 (const unsigned char *p1,
                                    const unsigned char *p2)
 {
-#ifdef  HAVE_64BIT_ARCH
+#ifdef  HAVE_64BIT_ARCH2
 // FIXME not ready yet - extend 32 bits?
         const unsigned long *up1 = (const unsigned long *)p1;
-        const unsigned long *up2 = (const unsigned long *)p1;
-        return (up1[0] ^ up2[0]) == 0UL;
+        const unsigned long *up2 = (const unsigned long *)p2;
+        const unsigned int *ip1 = (const unsigned int *) (&p1[8]);
+        const unsigned int *ip2 = (const unsigned int *)(&p2[8]);
+        return ((up1[0] ^ up2[0]) | (ip1[0] ^ ip2[0])) == 0UL;
 #else
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
@@ -200,18 +203,23 @@ linklocal(const unsigned char *address)
 }
 
 static inline int
-v4mapped2(const unsigned char *address)
+v4mapped(const unsigned char *address)
 {
     return memcmp(address, v4prefix, 12) == 0;
 }
 
 static inline int
-v4mapped(const unsigned char *address)
+v4mapped2(const unsigned char *address)
 {
+#ifdef  HAVE_64BIT_ARCH
+    const unsigned long *up1 = (const unsigned long *) address;
+    const unsigned int *up2 = (const unsigned int *) (&address[8]);
+    // Fixme Address extend?
+    return ((up1[0] ^ 0) | (up2[0] ^ htobe32(0xffff))) == 0;
+#else
     const unsigned int *up1 = (const unsigned int *) address;
-    // my brain hurts on endianess here - 0xffff0000 ?
-
-    return ((up1[0] ^ 0) | (up1[1] ^ 0) | (up1[2] ^ htobe32(0xffff)) ) == 0;
+    return ((up1[0] ^ 0) | (up1[1] ^ 0) | (up1[2] ^ htobe32(0xffff))) == 0;
+#endif
 }
 
 static inline void
