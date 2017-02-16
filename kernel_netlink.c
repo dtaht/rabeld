@@ -1031,7 +1031,7 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
+        if(newmetric == metric && v6_equal(newgate, gate) == 0 &&
            newifindex == ifindex)
             return 0;
         /* It would be better to add the new route before removing the
@@ -1284,7 +1284,7 @@ kernel_route2(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
+        if(newmetric == metric && v6_equal(newgate, gate) == 0 &&
            newifindex == ifindex)
             return 0;
 

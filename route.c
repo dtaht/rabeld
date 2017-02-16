@@ -86,7 +86,7 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         return -1;
     }
 
-    i = memcmp(prefix, route->src->prefix, 16);
+    i = v6_equal(prefix, route->src->prefix);
     if(i != 0)
         return i;
 
@@ -99,7 +99,7 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         if(route->src->src_plen > 0)
             return -1;
     } else {
-        i = memcmp(src_prefix, route->src->src_prefix, 16);
+        i = v6_equal(src_prefix, route->src->src_prefix);
         if(i != 0)
             return i;
         if(src_plen < route->src->src_plen)
@@ -160,7 +160,7 @@ find_route(const unsigned char *prefix, unsigned char plen,
     route = routes[i];
 
     while(route) {
-        if(route->neigh == neigh && memcmp(route->nexthop, nexthop, 16) == 0)
+        if(route->neigh == neigh && v6_equal(route->nexthop, nexthop) == 0)
             return route;
         route = route->next;
     }

@@ -93,6 +93,25 @@ static inline unsigned timeval_minus_msec(const struct timeval *s1, const struct
 
 }
 
+// If I get more ambitious I'll try 128 bit xmm and neon
+
+static inline int v6_equal (const unsigned char *p1,
+                                   const unsigned char *p2)
+{
+#ifdef  HAVE_64BIT_ARCH
+        const unsigned long *up1 = (const unsigned long *)p1;
+        const unsigned long *up2 = (const unsigned long *)p2;
+
+        return ((up1[0] ^ up2[0]) | (up1[1] ^ up2[1])) == 0UL;
+#else
+	return ((p1[0] ^ p2[0]) |
+                (p1[1] ^ p2[1]) |
+                (p1[2] ^ p2[2]) |
+                (p1[3] ^ p2[3])) == 0;
+#endif
+}
+
+
 void timeval_add_msec(struct timeval *d,
                       const struct timeval *s, int msecs);
 int timeval_compare(const struct timeval *s1, const struct timeval *s2)

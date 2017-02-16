@@ -442,7 +442,7 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY && newmetric == metric &&
-       memcmp(newgate, gate, 16) == 0 && newifindex == ifindex)
+       v6_equal(newgate, gate) == 0 && newifindex == ifindex)
         return 0;
 
 

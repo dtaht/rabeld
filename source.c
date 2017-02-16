@@ -52,11 +52,11 @@ source_compare(const unsigned char *id,
     if(plen > src->plen)
         return 1;
 
-    rc = memcmp(prefix, src->prefix, 16);
+    rc = v6_equal(prefix, src->prefix);
     if(rc != 0)
         return rc;
 
-    rc = memcmp(src_prefix, src->src_prefix, 16);
+    rc = v6_equal(src_prefix, src->src_prefix);
     if(rc != 0)
         return rc;
 
