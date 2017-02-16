@@ -1128,7 +1128,7 @@ kernel_route(int operation, int table,
 
     if(use_src) {
 	    if(ipv4) fprintf(stderr,"BAD: ipv4 using src: %d ????\n", src_plen - 96);
-	    rtm->rtm_src_len = ipv4 ? src_plen - 96 : plen;
+	    rtm->rtm_src_len = ipv4 ? src_plen - 96 : src_plen;
     }
 	    rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;

@@ -1,3 +1,7 @@
+* And like an hour later (after trying to announce stuff with a longer expires)
+
+I still have 2000 unreachable routes in the archer.
+
 * Going back into a chip via serial termainal
 
 The wifi driver is completely wedged. Ah, well, I wanted to blow up
@@ -10,7 +14,14 @@ so it is usable.
 That's ok, when the chip comes up in this state, it doesn't get a usable
 anything
 
-The chips, btw, will not "just start" if you plug the battery in.
+The chips, btw, will not "just start" if you plug the battery in. Nor do they
+seem to respond to what I thought was the power button. Unplugging the battery
+works but it is very fragile. I tried one script, and it constantly polled the
+cpu for the button, instead of blocking.
+
+You can learn battery status from battery.sh
+
+https://bbs.nextthing.co/t/usb-power-and-ups-battery-power-button/2812/4
 
 * In going back to doing this using the default babel daemon
 
