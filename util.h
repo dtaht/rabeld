@@ -21,6 +21,10 @@ THE SOFTWARE.
 */
 #ifndef _BABEL_UTIL
 #define _BABEL_UTIL
+#include <endian.h>
+
+// I have no idea why these horrid macros exist but I suppose i will
+// find out
 
 #define DO_NTOHS(_d, _s) \
     do { unsigned short _dd; \
@@ -113,6 +117,39 @@ static inline int v6_equal (const unsigned char *p1,
 #endif
 }
 
+static inline int v6_equal8 (const unsigned char *p1,
+                                   const unsigned char *p2)
+{
+#ifdef  HAVE_64BIT_ARCH
+        const unsigned long *up1 = (const unsigned long *)p1;
+        return ((up1[0] ^ up2[0]) == 0UL;
+#else
+        const unsigned int *up1 = (const unsigned int *)p1;
+        const unsigned int *up2 = (const unsigned int *)p2;
+	return ((up1[0] ^ up2[0]) |
+                (up1[1] ^ up2[1]))  == 0;
+#endif
+}
+
+// FIXME not ready yet
+
+static inline int v6_equal12 (const unsigned char *p1,
+                                   const unsigned char *p2)
+{
+#ifdef  HAVE_64BIT_ARCH
+// FIXME not ready yet - extend 32 bits?
+        const unsigned long *up1 = (const unsigned long *)p1;
+        const unsigned long *up2 = (const unsigned long *)p1;
+        return (up1[0] ^ up2[0]) == 0UL;
+#else
+        const unsigned int *up1 = (const unsigned int *)p1;
+        const unsigned int *up2 = (const unsigned int *)p2;
+	return ((up1[0] ^ up2[0]) |
+                (up1[1] ^ up2[1]) |  
+		(up1[2] ^ up2[2]))  == 0;
+#endif
+}
+
 
 void timeval_add_msec(struct timeval *d,
                       const struct timeval *s, int msecs);
@@ -158,13 +195,23 @@ extern const unsigned char llprefix[16];
 static inline int
 linklocal(const unsigned char *address)
 {
-    return memcmp(address, llprefix, 8) == 0;
+    const unsigned short *up1 = (const unsigned short *) address;
+    return up1[0] == htobe16(0xfe80); 
+}
+
+static inline int
+v4mapped2(const unsigned char *address)
+{
+    return memcmp(address, v4prefix, 12) == 0;
 }
 
 static inline int
 v4mapped(const unsigned char *address)
 {
-    return memcmp(address, v4prefix, 12) == 0;
+    const unsigned int *up1 = (const unsigned int *) address;
+    // my brain hurts on endianess here - 0xffff0000 ?
+
+    return ((up1[0] ^ 0) | (up1[1] ^ 0) | (up1[2] ^ htobe32(0xffff)) ) == 0;
 }
 
 static inline void
@@ -174,7 +221,8 @@ v4tov6(unsigned char *dst, const unsigned char *src)
     memcpy(dst + 12, src, 4);
 }
 
-// This less so as an inline
+// This less so as an inline. I'm not really sure as to th
+// purpose of all these compares.
 
 static inline enum prefix_status
 prefix_cmp(const unsigned char *p1, unsigned char plen1,
