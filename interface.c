@@ -173,6 +173,7 @@ check_interface_ipv4(struct interface *ifp)
     if(rc > 0) {
         if(!ifp->ipv4 || memcmp(ipv4, ifp->ipv4, 4) != 0) {
             debugf("Noticed IPv4 change for %s.\n", ifp->name);
+//  This strikes me as too aggressive - we should just flush ipv4 routes
             flush_interface_routes(ifp, 0);
             if(!ifp->ipv4)
                 ifp->ipv4 = malloc(4);
@@ -238,6 +239,10 @@ check_link_local_addresses(struct interface *ifp)
             ifp->ll = NULL;
         }
 	/* If we have a ipv4 address, flush that too to confuse babel less */
+
+	/* Hmm. This might be too agressive. Or we should be listening for
+           the netlink message for address assignment harder */
+
         if(ifp->ipv4) {
             debugf("Lost ipv6 link local must wipe ipv4 also for %s.\n",
 		    ifp->name);
@@ -282,6 +287,27 @@ check_link_local_addresses(struct interface *ifp)
 
     return 0;
 }
+
+/* We are compute or network bound in some way and taking too
+   long to work. Tell the world we're not going to talk to it as much.
+
+modify_update_interval() {
+
+// Maybe do different things for wireless than wired
+// If number listeners is high - I was seeing an explosion
+// across the net
+
+        if(type == IF_TYPE_WIRELESS)
+            ifp->hello_interval *= 2; // default_wireless_hello_interval;
+        else
+            ifp->hello_interval *= 2; // default_wired_hello_interval;
+
+        ifp->update_interval *= 2;
+
+	// then make sure that goes out soon.
+}
+
+*/
 
 int
 interface_up(struct interface *ifp, int up)

@@ -132,6 +132,8 @@ babel_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen)
     msg.msg_iov = &iovec;
     msg.msg_iovlen = 1;
 
+    // Fixme - no error checking here!
+    
     rc = recvmsg(s, &msg, 0);
     return rc;
 }
@@ -168,6 +170,8 @@ we get:
 sendmsg: kernel returned unknown error
 : Cannot assign requested address
 sendmsg: kernel returned unknown error
+
+Which turns out to be the undocumented EADDRNOTAVAIL!
 */
 
 
@@ -179,6 +183,8 @@ sendmsg: kernel returned unknown error
 	    case EINTR: continue;
 	    case ENOBUFS: fprintf(stderr,"Wow, enobufs is feasible!\n");
 	    case EAGAIN: sched_yield(); wait_for_fd(1,s,5); continue;
+	    case ENETDOWN: // this could just be a temporary error during dad?
+	    case EADDRNOTAVAIL: count = 10; break; // we lost our interface
 	    default: perror("sendmsg: kernel returned unknown error\n");
 		    continue;
 	    }

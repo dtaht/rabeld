@@ -1,3 +1,582 @@
+* Going back into a chip via serial termainal
+
+The wifi driver is completely wedged. Ah, well, I wanted to blow up
+multicast....
+
+and if you reboot the chip, the local usb interface on this side recognises
+that the driver went away, does recreate the interface, but does not up it again
+so it is usable.
+
+That's ok, when the chip comes up in this state, it doesn't get a usable
+anything
+
+The chips, btw, will not "just start" if you plug the battery in.
+
+* In going back to doing this using the default babel daemon
+
+I managed to completely crash all the chips on the network. 
+
+Running out of cpu doesn't help either.
+
+* Insight #3 
+
+and then everybody announces route retractions
+while everybody is trying to get routes
+Randomizing and rate limiting the retractions would help
+Finding some way to aggregate a retraction would help
+
+... And all this started merely because I was trying to A) blow up multicast and
+B) look into why netlink and sending packets sometimes failed
+
+I downgraded my test to just inject 1000 routes...
+
+* Insight #2
+
+Everybody else starts getting those routes - but does not respect the
+initial announcement, and re-announces with an interval of its default.
+
+And then the network collapses.
+
+* Insight
+
+OK, I'm announcing 10,000 routes. I know that I can send 80 per packet
+1k * 125 at 1Mbit (13ms) 1.6sec just to announce the routes.
+
+And the insight was this is times the number of speakers on the link
+So if I have 10 speakers rebroadcasting this amount - thats 16 seconds
+gone out of the 16 without any further traffic.
+
+The rate limiter is in the wrong place, I think, I still need to 
+get hellos out there, no matter what.
+
+When I have a ton of routes, I need to start changing the announced
+interval, and also start bumping up the hello interval. And make sure that gets
+out there....
+
+Another idea is to announce that I hear X number of routes on this link
+in the multicast IHU. They may be disjoint, but the router_id that hears the
+most routes from a given router_id is a winner. 
+
+And I'd need to be counting all the routes in my route table to get an estimate
+and in order to flood the routes
+
+And always reannounce the most bestest biggest routes - like src specific and
+default gateways - more often.
+
+I always wondered where the hard 10,000 route limit came from, it wasn't
+cpu - but the protocol implementation itself.
+
+* Chips don't have telnet and their nc is broken
+
+root@chip-1:~/babeld# nc ::1 33123
+::1: forward host lookup failed: Unknown host
+root@chip-1:~/babeld# 
+
+
+* babeld.c routerid can change
+during early boot we don't have a stable set of interfaces
+bridging might be kicking in, wifi still be setting up
+
+    if(!have_id && !random_id) {
+        /* We use all available interfaces here, since this increases the
+           chances of getting a stable router-id in case the set of Babel
+           interfaces changes. */
+
+* One of my other kvetches
+
+always picks up the wifi links sooner
+
+root@chip-1:~/babeld# ip route | grep usb
+default via 172.26.97.1 dev usb0  proto babel onlink 
+169.254.0.0/16 dev usb0  scope link  metric 1000 
+172.26.16.0/24 via 172.26.97.1 dev usb0  proto babel onlink 
+172.26.20.0/22 via 172.26.97.1 dev usb0  proto babel onlink 
+172.26.96.100 via 172.26.97.1 dev usb0  proto babel onlink 
+
+
+* netlink COULD return 0
+
+and why?
+
+-        if(len < 0) {
++    if(len < 0) {
+             perror("netlink_read: recvmsg()");
+             return -1;
+
+
+* TODO poke into why we get the send error twice
+
+Interface eno1 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 0
+Interface eno1 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 0
+send: Cannot assign requested address
+send: Cannot assign requested address
+
+So when I take the wifi interface down I don't see the down event
+
+send: Cannot assign requested address
+send: Cannot assign requested address
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+I bring it up
+
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+send: Cannot assign requested address
+send: Cannot assign requested address
+
+Not sure why we call leave group.
+
+Anyway I bring that up and then take eno1 down
+
+send: Cannot assign requested address
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+// Why would I call ADD during an event like this?
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+* So I can backfil the "good" things into the basic babel branch until it breaks
+
+** DONE More robust error checking -- which may be too robust
+** Compile guards
+** Whole program optimization
+** 
+
+* So I went back to the default babel for source specific and it worked
+
+somewhere in all these changes, I blew something up. No surprising.
+
+Perhaps you can get a temporary file exists message? or... 
+
+ALSO:
+
+in babeld I got a new message when I took the interface up and down.
+
+ENETDOWN
+
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+
+* Let's test this noprefixroute idea
+
+* What to do with ra and source specific
+
+Right now my rabel is in such a state that you cannot install a src specific
+address on top of a local address, or so it seems.
+
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 nexthop 172.26.16.5
+kernel_route(ADD): File exists
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev 2 nexthop fe80::32b5:c2ff:fe75:7faa
+kernel_route(ADD): File exists
+
+root@dancer:~/git/rabeld# ip -6 route | grep default
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65524sec hoplimit 64 pref high
+default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 2048  pref medium
+
+root@dancer:~/git/rabeld# ip -6 route | grep from
+2406:da00:ff00::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+** But... wait - Yea! this looks like a genuine bug in babel because it works from iproute!
+Could this be the order of the args to netlink?
+
+ip -6 route add default from 2601:646:4101:a740::/60 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+
+root@dancer:~/git/rabeld# ip -6 route | grep from
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+And the ipv4 message seems odd, as if it's going to be from it should be
+reversed, but that's perhaps a debugging message.
+
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 nexthop 172.26.16.5
+kernel_route(ADD): File exists
+
+
+* What to do with noprefixroute?
+
+And for that matter these - I think ever announcing addresses with short
+lifetimes is bad - and at the same time we could be smarter about doing the
+retraction during the preferred_lft period - e.g. retract the route 2 minutes
+after the preferred_lft expires. Nah.
+
+But what I'd like to do is not announce so many frickin addresses with routes
+attached. If I have a /128 on the same network as my /64, just announce the
+/64 and be done with it.
+
+And. Sigh - ipv4 has no noprefixroute concept.
+
+2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    inet6 fdaf:dc63:6de9:8:74d8:e400:84f9:38ce/64 scope global temporary dynamic 
+       valid_lft 592232sec preferred_lft 73595sec
+    inet6 fdaf:dc63:6de9:8:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft forever preferred_lft forever
+    inet6 2601:646:4101:a740:74d8:e400:84f9:38ce/64 scope global temporary dynamic 
+       valid_lft 299312sec preferred_lft 73595sec
+    inet6 2601:646:4101:a740:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft 299312sec preferred_lft 299312sec
+    inet6 fe80::eea8:6bff:fefe:9a2/64 scope link 
+       valid_lft forever preferred_lft forever
+3: wlp2s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    inet6 fd32:7d58:8d63::199/128 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fd32:7d58:8d63:0:a120:a749:ac4:cddf/64 scope global noprefixroute 
+       valid_lft forever preferred_lft forever
+    inet6 2601:646:4101:2de0:d041:214e:f40a:fe12/64 scope global noprefixroute dynamic 
+       valid_lft 307239sec preferred_lft 307239sec
+    inet6 fe80::19e7:b4bd:1a5e:561a/64 scope link 
+       valid_lft forever preferred_lft forever
+
+
+* Profile
+
+Box was relatively idle during these runs
+
+ach sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 57.46      5.40     5.40  1003792     0.01     0.01  find_resend
+ 18.75      7.16     1.76  5624187     0.00     0.00  find_route_slot
+  3.30      7.47     0.31  1433517     0.00     0.01  update_route
+  1.60      7.62     0.15     4569     0.03     0.20  update_neighbour_metric
+  1.12      7.72     0.11                             compare_buffered_updates
+  1.07      7.82     0.10                             parse_packet
+  0.96      7.91     0.09  1344015     0.00     0.00  really_send_update
+  0.85      7.99     0.08   176097     0.00     0.01  flushupdates
+  0.80      8.07     0.08  6450137     0.00     0.00  prefix_cmp
+  0.75      8.14     0.07     1298     0.05     0.05  route_stream
+
+
+* Let's try injecting only 4000 routes
+
+I installed 2000 routes - they were reachable briefly, then
+went unreachable briefly, then went reachable.
+
+One of the other boxes on the link went unreachable and stayed
+that way....
+
+really want atomic updates!!!!
+
+Now I have one route left over
+
+@dancer:~/git/rabeld$ ip -6 route | grep fd44
+fd44:0:0:7d0::/64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+Trust. But verify.
+
+* Sometime above about 4000 routes
+
+everything goes unreachable.
+
+I am increasingly certain babel has always been borken these ways.
+
+send(unicast): Cannot assign requested address
+
+Unreachable default route!
+Unreachable default route!
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+failed kernel_route add during replace: modify ::/0 from 2601:646:4101:2de0::/60 table 254 metric 65535 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+Add failed during replace: File exists
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+failed kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev 2 nexthop fe80::32b5:c2ff:fe75:7faa
+failed kernel_route add during replace: modify ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+Add failed during replace: File exists
+
+ailed kernel_route add during replace: modify ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+Add failed during replace: File exists
+failed kernel_route: flush ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+Unreachable default route!
+Unreachable default route!
+
+
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach | wc -l
+8306
+d@dancer:~/git/rabeld$ ip -6 route | grep -v unreach | wc -l
+1715
+
+Then everything goes unreachable
+
+d@dancer:~/git/rabeld$ ip -6 route | grep -v unreach | wc -l
+18
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach | wc -l
+10003
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+FIXME: Get the fucking metric here
+failed kernel_route: flush ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process ???
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(ADD): File exists
+
+
+* Added more debugging code
+
+I am not getting any "default from" routes at the moment
+It wouldn't surprise me if everything else on the net is hosed
+It also wouldn't surprise me my kernel is the cause of all this.
+
+** Disabling an interface via network manager does this:
+
+*** TODO I am curious what noprefixroute does nowadays
+
+*** I wonder how many other routes were on this in the window
+
+failed kernel_route: flush 172.26.96.61/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.96.65/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.113
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.201.127/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::61/128 from ::/0 table 254 metric 0 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::65/128 from ::/0 table 254 metric 0 dev 3 nexthop fe80::3aa2:8cff:fe5d:effb
+kernel_route(FLUSH): No such process
+
+** And bringing it back up does this:
+
+kernel_route(FLUSH): No such process
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+
 * printfs checking to see if stuff got spat on didn't help
 
 I can do more robust checking than I did. But I need to go
@@ -9,7 +588,7 @@ There is a single queue for all netlink events. This means
 that if work is backlogged on a given queue, and the interface
 goes away as it does here - we used to just hammer on the socket
 for 500ms. Now I'm only doing it for 50 (100?), but it isn't
-going toclear that fast.
+going to clear that fast.
 
 A "cure" would be to use select on one multicast group per idea.
 
@@ -56,6 +635,8 @@ Doesn't have a way to put in protos.
 Want it to use "proto dhcp" Doesn't. Totally unclear on all the
 machinery
 
+** DONE Sent an email to the list
+
 This, on the other hand, will at least give everything an overlarge
 metric.
 
@@ -83,8 +664,7 @@ default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 2048  pref 
 
 * So I slammed stuff to printf around the error...
 
-
-and haven't been able to duplicate it since
+and haven't been able to duplicate it since. Well, it just took longer.
 
 * More
 

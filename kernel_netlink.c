@@ -329,8 +329,9 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
     msg.msg_iovlen = 1;
 
     iov.iov_base = &buf;
+
+    int errors = 0;
     do {
-        int errors = 0;
         iov.iov_len = sizeof(buf);
         len = recvmsg(nl->sock, &msg, 0);
 
@@ -340,7 +341,7 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
 	    case EINTR: continue;
 	    case ENOBUFS:
 	    case ENOMEM:
-	    case EAGAIN: sched_yield(); continue;
+	    case EAGAIN: sched_yield(); continue; // fixme, wait for fd again
 	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
 			    continue;
 	    }
@@ -451,10 +452,12 @@ netlink_talk(struct nlmsghdr *nh)
             nl_command.seqno, &nl_command.seqno);
 
     int errors = 0;
+
 // formerly: 100ms timeout on kernel handling, setup of a select loop
 // Not a bad idea - the blocking context switch from the select
 // better accomplishes what I'm trying to do with yield - it's just
-// that the 100ms timeout bothers me...
+// that the 100ms timeout bothers me and something else may have gone
+// Wrong elsewhere.
 //        rc = wait_for_fd(1, nl_command.sock, 100);
     do {
     rc = sendmsg(nl_command.sock, &msg, MSG_DONTWAIT);
@@ -462,12 +465,34 @@ netlink_talk(struct nlmsghdr *nh)
 	    errors++;
 	    switch(errno) {
 	    case EINTR: continue;
-	    case EAGAIN: sched_yield(); continue;
+	    case EAGAIN: sched_yield();
+                         rc = wait_for_fd(1, nl_command.sock, 5);
+		    if( rc <=0 ) {
+			    if(rc == 0) continue;
+			    errors = 5;
+		    }
+		    continue; break; // hmm. When we overflow we get the rc from the waitfor
+	    // This could possibly be a temporary error:
+	    case ENETDOWN:
+	    // Interface probably went down and flushed for us. It won't be
+	    // be back any time soon:
+	    case ESRCH:
+	    // Pre-existing route (or a failure to update in time in
+	    // the kernel) that trying harder to add won't help.
+	    case EEXIST: errors = 5; break;
 	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
 			    continue;
 	    }
     }
     } while(rc < 0 && errors < 5);
+
+    //   FIXME: what if we get 0? Should never happen right? Well, 0 is now possible from
+    // the above and may have been possible before
+
+    if(rc == 0)fprintf(stderr, "netlink_talk returned 0!?\n");
+
+// FIXME: There is a netlink bug I'm trying to track down involving the errno
+//  sometimes getting wedged into the return message.
 
     if(rc < nh->nlmsg_len) {
         int saved_errno = errno;
@@ -475,6 +500,9 @@ netlink_talk(struct nlmsghdr *nh)
         errno = saved_errno;
         return -1;
     }
+
+// FIXME: Can this get out of sync?? I didn't manage to write it, so why should
+// I read it?
 
     rc = netlink_read(&nl_command, NULL, 1, NULL); /* FIXME: Do more robust checking of the ACK */
 
@@ -525,6 +553,8 @@ netlink_send_dump(int type, void *data, int len) {
 
     kdebugf("Sending seqno %d from address %p (dump)\n",
             nl_command.seqno, &nl_command.seqno);
+
+    // FIXME - no decent error checking here
 
     rc = sendmsg(nl_command.sock, &msg, 0);
     if(rc < buf.nh.nlmsg_len) {
@@ -933,6 +963,21 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
+/*
+void print_failed_netlink(char *s, int operation, int table, int metric, int dev, int via,
+		char *dest, int plen, char *src, int src_plen, int ifindex, char * gate) {
+
+        fprintf(stderr,"failed kernel_route %s %s from %s "
+            "table %d metric %d dev %s via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex(ifindex), format_address(gate));
+	}
+}
+*/
+
 // The way this gets called is confusing
 // "newgate" is only used on a change or replace
 // otherwise add/del uses the first parameters only
@@ -996,14 +1041,22 @@ kernel_route(int operation, int table,
            stick with the naive approach, and hope that the window is
            small enough to be negligible. */
 
+        // FIXME if the interface went down there is no
+	// route to flush because the kernel did it for us
+	// A way to deal with this is always have two or more
+	// routes installed in the kernel
+
         rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
                      NULL, 0, 0, 0);
+
+// this is tarting to get tedious if(!if_indextoname(route->ifindex, ifname))
+
 	if(rc < 0) {
         perror("flush failed during replace");
-        fprintf(stderr,"failed kernel_route flush during replace: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+        fprintf(stderr,"failed kernel_route %s during replace: %s from %s "
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1016,7 +1069,7 @@ kernel_route(int operation, int table,
                           NULL, 0, 0, 0);
         if(rc < 0) {
          fprintf(stderr,"failed kernel_route add during replace: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1041,17 +1094,22 @@ kernel_route(int operation, int table,
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
 
     kdebugf("kernel_route: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
     /* Unreachable default routes cause all sort of weird interactions;
-       ignore them. */
+       where do they come from? */
 
     if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96))) {
-	    fprintf(stderr,"Unreachable default route!\n");
+    fprintf(stderr,"unreachable kernel_route: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
 	    return 0;
     }
 
@@ -1154,7 +1212,7 @@ kernel_route(int operation, int table,
 
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1162,7 +1220,7 @@ kernel_route(int operation, int table,
             table, metric, ifindex, format_address(gate));
 	    if(operation == ROUTE_MODIFY) {
 	    fprintf(stderr,"failed kernel_change: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1241,6 +1299,11 @@ kernel_route2(int operation, int table,
 The thing that bothers me is I'm always seeing infinite routes
 starting off that way */
 
+        // FIXME if the interface went down there is no
+	// route to modify because the kernel did it for us
+	// A way to deal with this is always have two or more
+	// routes installed in the kernel
+
 	if(metric == KERNEL_INFINITY) {
 	        kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
@@ -1258,13 +1321,15 @@ starting off that way */
         }
         return rc;
 	}
+
+//	ifindex_lo = if_nametoindex("lo"); should end up being a global somewhere
 //	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
     }
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
 
     kdebugf("kernel_route: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" : 
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1420,7 +1485,7 @@ starting off that way */
 
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" : 
 	    operation == ROUTE_MODIFY ? "modify" : "???",
@@ -1428,7 +1493,7 @@ starting off that way */
             table, metric, ifindex, format_address(gate));
 	    if(operation == ROUTE_MODIFY) {
 	    fprintf(stderr,"failed kernel_change: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" : 
 	    operation == ROUTE_MODIFY ? "modify" : "???",

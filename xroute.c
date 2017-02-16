@@ -229,6 +229,18 @@ filter_address(struct kernel_addr *addr, void *data) {
 
 /* ifindex is 0 for all interfaces.  ll indicates whether we are
    interested in link-local or global addresses. */
+
+/* FIXME: Now (Linux 4.x) that we have noprefix addresses, and we're
+   using babel, we could try and make sure all addresses
+   have noprefix attached to them so the kernel stops doing
+   too much work for us.
+
+   Also it would be nice to have a filter that would not
+   announce certain kinds of addresses - notably addresses
+   in a temp or dad state.
+
+*/
+
 int
 kernel_addresses(int ifindex, int ll, struct kernel_route *routes,
                  int maxroutes)
