@@ -97,9 +97,16 @@ static inline unsigned timeval_minus_msec(const struct timeval *s1, const struct
 
 }
 
+ 
+static inline int v6_equal (const unsigned char *p1,
+                            const unsigned char *p2) {
+       return memcmp(p1,p2,16);
+
+}
+
 // If I get more ambitious I'll try 128 bit xmm and neon
 
-static inline int v6_equal (const unsigned char *p1,
+static inline int v6_equal2 (const unsigned char *p1,
                                    const unsigned char *p2)
 {
 #ifdef  HAVE_64BIT_ARCH
@@ -215,7 +222,7 @@ v4mapped2(const unsigned char *address)
     const unsigned long *up1 = (const unsigned long *) address;
     const unsigned int *up2 = (const unsigned int *) (&address[8]);
     // Fixme Address extend?
-    return ((up1[0] ^ 0) | (up2[0] ^ htobe32(0xffff))) == 0;
+    return ((up1[0] ^ 0) | (up2[0] ^ htobe32(0xffff))) == 0UL;
 #else
     const unsigned int *up1 = (const unsigned int *) address;
     return ((up1[0] ^ 0) | (up1[1] ^ 0) | (up1[2] ^ htobe32(0xffff))) == 0;
