@@ -1,3 +1,21 @@
+* Killing network manager wqas a pita
+
+wpa_supplicant -dd -Dnl80211 -iwlan0 -c /etc/wpa_supplicant/chip.conf  &
+root@chip-6:/etc/wpa_supplicant# ifconfig wlan0 up
+root@chip-6:/etc/wpa_supplicant# dhclient wlan0
+
+
+
+* On the chips, I think... in the end what's killing them
+is networkmanager going crazy listening to netlink. 
+they were red-hot when I rebooted them
+
+because odhcpd is smarter we don't pound it as hard. Have to look into the
+bpf stuff in that. That looks HANDY.
+
+* Killed the thinko on source specific
+
+
 * And like an hour later (after trying to announce stuff with a longer expires)
 
 I still have 2000 unreachable routes in the archer.
