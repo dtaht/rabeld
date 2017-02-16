@@ -104,10 +104,12 @@ static inline int v6_equal (const unsigned char *p1,
 
         return ((up1[0] ^ up2[0]) | (up1[1] ^ up2[1])) == 0UL;
 #else
-	return ((p1[0] ^ p2[0]) |
-                (p1[1] ^ p2[1]) |
-                (p1[2] ^ p2[2]) |
-                (p1[3] ^ p2[3])) == 0;
+        const unsigned int *up1 = (const unsigned int *)p1;
+        const unsigned int *up2 = (const unsigned int *)p2;
+	return ((up1[0] ^ up2[0]) |
+                (up1[1] ^ up2[1]) |
+                (up1[2] ^ up2[2]) |
+                (up1[3] ^ up2[3])) == 0;
 #endif
 }
 
