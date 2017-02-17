@@ -385,12 +385,12 @@ route_stream(int which)
     if(!check_specific_first())
         fprintf(stderr, "Invariant failed: specific routes first in RIB.\n");
 
-    stream = calloc(1, sizeof(struct route_stream));
+    stream = malloc(sizeof(struct route_stream));
     if(stream == NULL)
         return NULL;
 
     stream->installed = which;
-    stream->index = which == ROUTE_ALL ? -1 : 0;
+    stream->index = which == ROUTE_ALL ? -1 : 0; // I don't understand this
     stream->next = NULL;
 
     return stream;

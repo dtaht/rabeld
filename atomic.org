@@ -1,3 +1,22 @@
+* A clue:
+
+The arm box, running rabeld - no unreachable routes
+the x86 has 6k. But none got made static
+the archer mips and a few others - 6k also running babeld
+
+On this arm box - still running network manager
+
+Feb 17 01:01:36 chip-4 NetworkManager[305]: <error> [1487293296.623445] [platform/nm-linux-platform.c:3814] event_handler(): Failed to retrieve incoming events: Out of memory (-5)
+Feb 17 01:02:33 chip-4 NetworkManager[305]: <error> [1487293353.121403] [platform/nm-linux-platform.c:3814] event_handler(): Failed to retrieve incoming events: Out of memory (-5)
+
+But I can't tell since I was dumb and didn't enable the local interface
+to see if it had tried to flush anything
+
+And, after running for ages, I end up with 103 routes ending up unreach and
+static on the x86 box
+
+I should break out valgrind.
+
 * Hmm. Maybe we have a type casting problem
 
 some places where the proto is unsigned char, others where it is an int,
