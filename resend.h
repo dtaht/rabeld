@@ -28,18 +28,18 @@ THE SOFTWARE.
 #define RESEND_UPDATE 2
 
 struct resend {
-    unsigned char kind;
+    struct resend *next;
+    unsigned char kind; // as an int this might suck less
     unsigned char max;
+    unsigned char plen;
+    unsigned char src_plen;
+    unsigned char prefix[16];
+    unsigned char src_prefix[16];
     unsigned short delay;
     struct timeval time;
-    unsigned char prefix[16];
-    unsigned char plen;
-    unsigned char src_prefix[16];
-    unsigned char src_plen;
     unsigned short seqno;
     unsigned char id[8];
     struct interface *ifp;
-    struct resend *next;
 };
 
 extern struct timeval resend_time;
@@ -63,8 +63,33 @@ resend_match(struct resend *resend,
 void flush_resends(struct neighbour *neigh);
 
 
+// Pointer walking sucks. Any way I try to re-org this it is going to suck
+
 static inline struct resend *
 find_resend(int kind, const unsigned char *prefix, unsigned char plen,
+            const unsigned char *src_prefix, unsigned char src_plen,
+            struct resend **previous_return)
+{
+    struct resend *current, *previous;
+    __builtin_prefetch(current,0,1);
+    current = to_resend;
+    previous = NULL;
+    while(current) {
+	__builtin_prefetch(current->next,0,1)
+        if(resend_match(current, kind, prefix, plen, src_prefix, src_plen)) {
+            if(previous_return)
+                *previous_return = previous;
+            return current;
+        }
+        previous = current;
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+static inline struct resend *
+find_resend2(int kind, const unsigned char *prefix, unsigned char plen,
             const unsigned char *src_prefix, unsigned char src_plen,
             struct resend **previous_return)
 {
