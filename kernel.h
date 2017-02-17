@@ -30,13 +30,14 @@ struct kernel_route {
     unsigned char prefix[16];
     unsigned char src_prefix[16];
     unsigned char gw[16];
-    int plen; // FIXME: why are these ints? uchars
-    int src_plen; /* no source prefix <=> src_plen == 0 */
+    unsigned char plen; // FIXME: why were these ints?
+    unsigned char src_plen; /* no source prefix <=> src_plen == 0 */
+    unsigned char proto; // This is an unsigned char in the real world
+    unsigned char pad;
     int metric;
     unsigned int ifindex;
     int expires;
-    int proto; // This is an unsigned char in the real world
-}; // FIXME: I would not mind aligning this on 16 byte boundaries
+}; // Yea! these are now aligned this on 16 byte boundaries
 
 struct kernel_addr {
     struct in6_addr addr;
