@@ -1,3 +1,37 @@
+ Coimparison
+
+** x86 box running rabeld - 500 stuck unreachable routes
+** Arm running stock babeld - 0
+** Arm running rabeld 0
+** Mips box with babel 500
+
+A difference between these is
+that the mips box and the x86 are on the same link
+the two arms are on wifi.
+
+Hmm... could it be a size_t difference on time?
+or in netlink?
+
+* I keep hoping these will go away
+
+root@dancer:~/git/rabeld# ./babeld eno1 wlp2s0 -G 33123
+Type: 0
+Type: 2
+unreachable kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 2 via fe80::32b5:c2ff:fe75:7faa
+unreachable kernel_route: add 0.0.0.0/0 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+unreachable kernel_route: flush ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 2 via fe80::32b5:c2ff:fe75:7faa
+unreachable kernel_route: flush 0.0.0.0/0 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
+failed kernel_route: flush 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+flush failed during replace: No such process
+failed kernel_route modify during replace: 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.5
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
 * Corrected major thinko and logic error
 
 C false = 0
