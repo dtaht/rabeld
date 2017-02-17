@@ -30,7 +30,7 @@ struct xroute {
     unsigned short metric; // FIXME metric is a short here?
     int expires;
     unsigned int ifindex;
-    int proto;
+    unsigned char proto;
 };
 
 struct xroute_stream;
