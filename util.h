@@ -114,13 +114,13 @@ static inline unsigned timeval_minus_msec(const struct timeval *s1, const struct
 // and false is represented by 0. Essentially, memcmp returns
 // false if two things are equal!
  
-static inline int v6_equal (const unsigned char *p1,
+static inline int v6_equal2 (const unsigned char *p1,
                             const unsigned char *p2) {
        return memcmp(p1,p2,16) == 0;
 
 }
 
-static inline int v6_nequal (const unsigned char *p1,
+static inline int v6_nequal2 (const unsigned char *p1,
                             const unsigned char *p2) {
        return memcmp(p1,p2,16) != 0;
 
@@ -130,7 +130,7 @@ static inline int v6_nequal (const unsigned char *p1,
 // I want to get away from the comparison here
 // if I make this a size_t instead, what happens?
 
-static inline size_t v6_equal2 (const unsigned char *p1,
+static inline size_t v6_equal (const unsigned char *p1,
                                    const unsigned char *p2)
 {
 #ifdef  HAVE_64BIT_ARCH
@@ -146,6 +146,11 @@ static inline size_t v6_equal2 (const unsigned char *p1,
                 (up1[2] ^ up2[2]) |
                 (up1[3] ^ up2[3]));
 #endif
+}
+
+static inline size_t v6_nequal (const unsigned char *p1,
+                                   const unsigned char *p2) {
+return !v6_equal(p1,p2);
 }
 
 static inline size_t v6_nequal8 (const unsigned char *p1,
