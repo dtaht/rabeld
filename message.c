@@ -1308,6 +1308,11 @@ flushupdates(struct interface *ifp)
         /* In order to send fewer update messages, we want to send updates
            with the same router-id together, with IPv6 going out before IPv4. */
 
+	// Actually in my network I have a metric ton of ipv6, and less ipv4
+	// and you really notice when ipv4 goes down. FIXME. Think on better
+	// ideas for prioritizing route transfer - like the best routes first
+	// source specific, defaults, etc.
+
         for(i = 0; i < n; i++) {
             route = find_installed_route(b[i].prefix, b[i].plen,
                                          b[i].src_prefix, b[i].src_plen);
@@ -1331,8 +1336,8 @@ flushupdates(struct interface *ifp)
             if(last_prefix &&
                b[i].plen == last_plen &&
                b[i].src_plen == last_src_plen &&
-               memcmp(b[i].prefix, last_prefix, 16) == 0 &&
-               memcmp(b[i].src_prefix, last_src_prefix, 16) == 0)
+               v6_equal(b[i].prefix, last_prefix) &&
+               v6_equal(b[i].src_prefix, last_src_prefix))
                 continue;
 
             xroute = find_xroute(b[i].prefix, b[i].plen,
