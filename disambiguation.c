@@ -40,8 +40,8 @@ THE SOFTWARE.
 
 struct zone {
     const unsigned char *dst_prefix;
-    unsigned char dst_plen;
     const unsigned char *src_prefix;
+    unsigned char dst_plen;
     unsigned char src_plen;
 };
 
