@@ -9,6 +9,7 @@
 // #include <rand.h>
 #include <memory.h>
 #include <endian.h>
+#include <arpa/inet.h>
 
 #define MAX_PREFIX 1024
 
@@ -18,13 +19,16 @@ typedef struct {
 } prefix_table; // Fixme, try aligned and unaligned
 
 
+// Memcmp returns -1,0,1. 0 for equality
+
 static inline int v6_equal (const unsigned char *p1,
                             const unsigned char *p2) {
-       return memcmp(p1,p2,16);
+       return memcmp(p1,p2,16) == 0;
 
 }
 
 // If I get more ambitious I'll try 128 bit xmm and neon
+// What I think I want to do is use NOTEQUAL!
 
 static inline int v6_equal2 (const unsigned char *p1,
                                    const unsigned char *p2)
@@ -72,7 +76,7 @@ static inline int v6_equal12 (const unsigned char *p1,
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
 	return ((up1[0] ^ up2[0]) |
-                (up1[1] ^ up2[1]) | 
+                (up1[1] ^ up2[1]) |
 		(up1[2] ^ up2[2]))  == 0;
 #endif
 }
@@ -122,6 +126,47 @@ unsigned char *random_prefix() {
 	return (unsigned char *) a;
 }
 
+// I can imagine this also blowing up on people without the __thread
+
+const char *
+format_prefix(const unsigned char *prefix, unsigned char plen)
+{
+    static __thread char buf[4][INET6_ADDRSTRLEN + 4] = {0};
+    static int i = 0;
+    int n;
+    i = (i + 1) % 4; // WTF in a 64 bit arch?
+    if(plen >= 96 && v4mapped(prefix)) {
+        inet_ntop(AF_INET, prefix + 12, buf[i], INET6_ADDRSTRLEN);
+        n = strlen(buf[i]);
+        snprintf(buf[i] + n, INET6_ADDRSTRLEN + 4 - n, "/%d", plen - 96);
+    } else {
+        inet_ntop(AF_INET6, prefix, buf[i], INET6_ADDRSTRLEN);
+        n = strlen(buf[i]);
+        snprintf(buf[i] + n, INET6_ADDRSTRLEN + 4 - n, "/%d", plen);
+    }
+    return buf[i];
+}
+
+const char *
+format_prefix2(const unsigned char *prefix, unsigned char plen)
+{
+    static char buf[4][INET6_ADDRSTRLEN + 4];
+    static int i = 0;
+    int n;
+    i = (i + 1) % 4;
+    if(plen >= 96 && v4mapped2(prefix)) {
+        inet_ntop(AF_INET, prefix + 12, buf[i], INET6_ADDRSTRLEN);
+        n = strlen(buf[i]);
+        snprintf(buf[i] + n, INET6_ADDRSTRLEN + 4 - n, "/%d", plen - 96);
+    } else {
+        inet_ntop(AF_INET6, prefix, buf[i], INET6_ADDRSTRLEN);
+        n = strlen(buf[i]);
+        snprintf(buf[i] + n, INET6_ADDRSTRLEN + 4 - n, "/%d", plen);
+    }
+    return buf[i];
+}
+
+
 int main() {
 	int count = 0;
 	int count2 = 0;
@@ -136,6 +181,18 @@ int main() {
 	memcpy(p[MAX_PREFIX/2].prefix,llprefix,16);
 	memcpy(p[MAX_PREFIX/3].prefix,v4prefix,16);
 
+	// Check to see if we are formatting prefixes correctly
+	// Heh. I just learned something - if we call format_prefix twice, we might overwrite stuff
+        // And that could be what I'm doing wrong in all those debug statements
+
+	printf("v4mapped print %s, ll print %s\n",format_prefix(p[MAX_PREFIX/2].prefix,
+								p[MAX_PREFIX/2].plen),
+						format_prefix(p[MAX_PREFIX/3].prefix,
+							p[MAX_PREFIX/3].plen));
+	printf("v4mapped2 print %s, ll print %s\n",format_prefix2(p[MAX_PREFIX/2].prefix,
+								p[MAX_PREFIX/2].plen),
+						format_prefix2(p[MAX_PREFIX/3].prefix,
+							p[MAX_PREFIX/3].plen));
 	count = 0;
 	for(i = 0; i<MAX_PREFIX; i++) {
 		if(v4mapped(p[i].prefix)) count++;
