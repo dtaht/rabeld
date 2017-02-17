@@ -35,6 +35,7 @@ THE SOFTWARE.
 #include <arpa/inet.h>
 #include <errno.h>
 #include <sched.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"

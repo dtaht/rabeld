@@ -21,6 +21,7 @@ THE SOFTWARE.
 */
 #ifndef _BABEL_BABELD
 #define _BABEL_BABELD
+#include <unistd.h>
 
 #define INFINITY ((unsigned short)(~0))
 
@@ -95,7 +96,7 @@ extern const char *logfile, *pidfile, *state_file;
 extern int link_detect;
 extern int all_wireless;
 extern int has_ipv6_subtrees;
-
+extern volatile sig_atomic_t majortimeout;
 extern unsigned char myid[8];
 extern int have_id;
 

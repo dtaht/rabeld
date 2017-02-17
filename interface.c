@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <netinet/in.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"

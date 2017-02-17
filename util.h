@@ -23,9 +23,19 @@ THE SOFTWARE.
 #define _BABEL_UTIL
 #include <endian.h>
 
-// I have no idea why these horrid macros exist but I suppose i will
-// find out
 
+// I have no idea why these horrid macros exist but I suppose i will
+// find out - unaligned access probably. Which we don't care about,
+// except on mips and maybe arms. This is a single instruction...
+
+#if 0
+
+#define DO_NTOHS(_d, _s) (_d) = be16toh(_s)
+#define DO_NTOHL(_d, _s) (_d) = be32toh(_s)
+#define DO_HTONS(_d, _s) (_d) = htobe16(_s)
+#define DO_HTONL(_d, _s) (_d) = htobe32(_s)
+
+#else
 #define DO_NTOHS(_d, _s) \
     do { unsigned short _dd; \
          memcpy(&(_dd), (_s), 2); \
@@ -42,6 +52,7 @@ THE SOFTWARE.
     do { unsigned _dd; \
          _dd = htonl(_s); \
          memcpy((_d), &(_dd), 4); } while(0)
+#endif
 
 static inline int
 seqno_compare(unsigned short s1, unsigned short s2)

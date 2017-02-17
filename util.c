@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>

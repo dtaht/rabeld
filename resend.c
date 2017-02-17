@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"

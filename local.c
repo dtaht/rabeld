@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include <errno.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "interface.h"

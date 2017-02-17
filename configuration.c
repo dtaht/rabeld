@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <signal.h>
 
 #ifdef __linux
 /* Defining it rather than including <linux/rtnetlink.h> because this

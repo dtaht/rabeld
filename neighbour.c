@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include <time.h>
 #include <assert.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"

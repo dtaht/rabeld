@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"

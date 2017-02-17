@@ -95,6 +95,7 @@ static int kernel_addr_changed = 0;
 struct timeval check_neighbours_timeout, check_interfaces_timeout;
 
 static volatile sig_atomic_t exiting = 0, dumping = 0, reopening = 0;
+volatile sig_atomic_t majortimeout = 0;
 
 static int accept_local_connections(void);
 static void init_signals(void);
@@ -1002,6 +1003,12 @@ sigreopening(int signo)
 }
 
 static void
+sigalarm(int signo)
+{
+    majortimeout = 1;
+}
+
+static void
 init_signals(void)
 {
     struct sigaction sa;
@@ -1042,6 +1049,12 @@ init_signals(void)
     sa.sa_mask = ss;
     sa.sa_flags = 0;
     sigaction(SIGUSR2, &sa, NULL);
+
+    sigemptyset(&ss);
+    sa.sa_handler = sigalarm;
+    sa.sa_mask = ss;
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, NULL);
 
 #ifdef SIGINFO
     sigemptyset(&ss);

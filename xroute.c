@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include <assert.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "kernel.h"
