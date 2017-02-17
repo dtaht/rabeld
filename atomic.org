@@ -1,3 +1,18 @@
+* And finally after all this work
+
+I finally got to where solving for bellman-ford showed up in the
+profile - still with 20% of cpu in memcmp, but the rest
+in min_conflict. 
+
+We need to periodically check within this routine if we've run
+out of time - and make sure we get a hello out so we don't
+fall off the net while computing too hard. We can announce
+increasd intervals too. 
+
+This is an end-game. This is what I wanted. Happy.
+
+* I should go back to 1.7.1 and 1.6 to see what happens.
+
 * A clue:
 
 The arm box, running rabeld - no unreachable routes
