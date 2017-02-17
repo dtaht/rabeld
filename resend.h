@@ -71,7 +71,7 @@ find_resend(int kind, const unsigned char *prefix, unsigned char plen,
             struct resend **previous_return)
 {
     struct resend *current, *previous;
-    __builtin_prefetch(current,0,1);
+    __builtin_prefetch(to_resend,0,1); // if I keep this should lift it to the caller
     current = to_resend;
     previous = NULL;
     while(current) {
