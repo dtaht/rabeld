@@ -75,7 +75,7 @@ find_resend(int kind, const unsigned char *prefix, unsigned char plen,
     current = to_resend;
     previous = NULL;
     while(current) {
-	__builtin_prefetch(current->next,0,1)
+	__builtin_prefetch(current->next,0,1);
         if(resend_match(current, kind, prefix, plen, src_prefix, src_plen)) {
             if(previous_return)
                 *previous_return = previous;
