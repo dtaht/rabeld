@@ -1,3 +1,9 @@
+* Hmm. Maybe we have a type casting problem
+
+some places where the proto is unsigned char, others where it is an int,
+and many, many casts. This would explain why I didn't see it when I
+looked in the proto built up. Really need a netlink verifier.
+
 * gcc inline intrinsics
 
 http://hardwarebug.org/2010/07/06/arm-inline-asm-secrets/
