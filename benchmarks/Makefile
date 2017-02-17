@@ -28,5 +28,14 @@ bench64_O2: $(SRC)
 bench64_O3: $(SRC)
 	$(CC) $(CFLAGS) -O3 $(H64) $(SRC) -o $@
 
+#run: 	$(PROGS)
+#	OUTPUT= $(foreach p,$(PROGS),$(shell ./$(p))) ## well it seemed like a good idea
+#	echo $(OUTPUT)
+run: 	$(PROGS)
+	./bench_Os
+	./bench_O1
+	./bench_O2
+	./bench_O3
+
 clean: 
 	rm -f $(PROGS) gmon.out

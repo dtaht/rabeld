@@ -1227,6 +1227,9 @@ really_send_update(struct interface *ifp,
     }
 }
 
+// FIXME all callers have to check for true or false
+// if I want to get away from memcmp
+
 static int
 compare_buffered_updates(const void *av, const void *bv)
 {
@@ -1258,7 +1261,7 @@ compare_buffered_updates(const void *av, const void *bv)
     else if(a->plen > b->plen)
         return -1;
 
-    rc = v6_equal(a->prefix, b->prefix);
+    rc = memcmp(a->prefix, b->prefix,16);
     if(rc != 0)
         return rc;
 
@@ -1267,7 +1270,7 @@ compare_buffered_updates(const void *av, const void *bv)
     else if(a->src_plen > b->src_plen)
         return 1;
 
-    return v6_equal(a->src_prefix, b->src_prefix);
+    return memcmp(a->src_prefix, b->src_prefix,16);
 }
 
 void
@@ -1313,6 +1316,10 @@ flushupdates(struct interface *ifp)
             else
                 memcpy(b[i].id, myid, 8);
         }
+
+// FIXME - memcmp conversion issue
+// what if two things are unequal instead of different?
+// How does less than etc work? Do I care about exact memcmp here?
 
         qsort(b, n, sizeof(struct buffered_update), compare_buffered_updates);
 

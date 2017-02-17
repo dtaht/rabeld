@@ -1215,7 +1215,7 @@ filter_match(struct filter *f, const unsigned char *id,
             return 0;
     }
     if(f->neigh) {
-        if(!neigh || v6_equal(f->neigh, neigh) != 0)
+        if(!neigh || v6_equal(f->neigh, neigh))
             return 0;
     }
     if(f->ifname) {

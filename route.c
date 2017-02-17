@@ -73,6 +73,8 @@ check_specific_first(void)
    contains a linked list of the routes to this prefix, with the
    installed route, if any, at the head of the list. */
 
+// FIXME logic again - callers 
+
 static int
 route_compare(const unsigned char *prefix, unsigned char plen,
               const unsigned char *src_prefix, unsigned char src_plen,
@@ -87,8 +89,14 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         return -1;
     }
 
+/*
+    FIXME: don't really think we care about which way it is not equal
     i = v6_equal(prefix, route->src->prefix);
-    if(i != 0)
+    if(i == false) 
+        return -2;
+*/
+    i = memcmp(prefix, route->src->prefix, 16);
+    if(i != 0 ) 
         return i;
 
     if(plen < route->src->plen)
@@ -100,9 +108,15 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         if(route->src->src_plen > 0)
             return -1;
     } else {
+	/* FIXME: Don't think we care greator or lessor
         i = v6_equal(src_prefix, route->src->src_prefix);
+        if(i == false)
+            return -2;
+	*/
+        i = memcmp(src_prefix, route->src->src_prefix,16);
         if(i != 0)
             return i;
+
         if(src_plen < route->src->src_plen)
             return -1;
         if(src_plen > route->src->src_plen)
@@ -161,7 +175,7 @@ find_route(const unsigned char *prefix, unsigned char plen,
     route = routes[i];
 
     while(route) {
-        if(route->neigh == neigh && v6_equal(route->nexthop, nexthop) == 0)
+        if(route->neigh == neigh && v6_equal(route->nexthop, nexthop))
             return route;
         route = route->next;
     }

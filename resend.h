@@ -54,9 +54,9 @@ resend_match(struct resend *resend,
              const unsigned char *src_prefix, unsigned char src_plen)
 {
     return (resend->kind == kind &&
-            resend->plen == plen && v6_equal(resend->prefix, prefix) == 0 &&
+            resend->plen == plen && v6_equal(resend->prefix, prefix) &&
             resend->src_plen == src_plen &&
-            v6_equal(resend->src_prefix, src_prefix) == 0);
+            v6_equal(resend->src_prefix, src_prefix) );
 }
 
 

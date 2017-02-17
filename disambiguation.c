@@ -135,9 +135,9 @@ static int
 zone_equal(const struct zone *z1, const struct zone *z2)
 {
     return z1 && z2 && z1->dst_plen == z2->dst_plen &&
-        v6_equal(z1->dst_prefix, z2->dst_prefix) == 0 &&
+        v6_equal(z1->dst_prefix, z2->dst_prefix) &&
         z1->src_plen == z2->src_plen &&
-        v6_equal(z1->src_prefix, z2->src_prefix) == 0;
+        v6_equal(z1->src_prefix, z2->src_prefix) ;
 }
 
 static const struct babel_route *

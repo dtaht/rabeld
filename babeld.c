@@ -1069,8 +1069,9 @@ static void
 dump_route(FILE *out, struct babel_route *route)
 {
     const unsigned char *nexthop =
-        v6_equal(route->nexthop, route->neigh->address) == 0 ?
+        v6_nequal(route->nexthop, route->neigh->address) ?
         NULL : route->nexthop;
+
     char channels[100];
 
     if(route->channels_len == 0) {

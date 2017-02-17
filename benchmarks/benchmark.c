@@ -132,9 +132,9 @@ const char *
 format_prefix(const unsigned char *prefix, unsigned char plen)
 {
     static __thread char buf[4][INET6_ADDRSTRLEN + 4] = {0};
-    static int i = 0;
+    static __thread int i = 0;
     int n;
-    i = (i + 1) % 4; // WTF in a 64 bit arch?
+    i = (i + 1) % 4; // WTF in a 64 bit arch? Let you call this 4 times?
     if(plen >= 96 && v4mapped(prefix)) {
         inet_ntop(AF_INET, prefix + 12, buf[i], INET6_ADDRSTRLEN);
         n = strlen(buf[i]);
@@ -150,8 +150,8 @@ format_prefix(const unsigned char *prefix, unsigned char plen)
 const char *
 format_prefix2(const unsigned char *prefix, unsigned char plen)
 {
-    static char buf[4][INET6_ADDRSTRLEN + 4];
-    static int i = 0;
+    static __thread char buf[4][INET6_ADDRSTRLEN + 4];
+    static __thread int i = 0;
     int n;
     i = (i + 1) % 4;
     if(plen >= 96 && v4mapped2(prefix)) {
@@ -184,7 +184,9 @@ int main() {
 	// Check to see if we are formatting prefixes correctly
 	// Heh. I just learned something - if we call format_prefix twice, we might overwrite stuff
         // And that could be what I'm doing wrong in all those debug statements
-
+        // and format_prefix seems to buffer 4 times so you can call it 4 times!
+	// clever. But a little scary....
+	
 	printf("v4mapped print %s, ll print %s\n",format_prefix(p[MAX_PREFIX/2].prefix,
 								p[MAX_PREFIX/2].plen),
 						format_prefix(p[MAX_PREFIX/3].prefix,

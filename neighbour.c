@@ -45,7 +45,7 @@ find_neighbour_nocreate(const unsigned char *address, struct interface *ifp)
 {
     struct neighbour *neigh;
     FOR_ALL_NEIGHBOURS(neigh) {
-        if(v6_equal(address, neigh->address) == 0 &&
+        if(v6_equal(address, neigh->address) &&
            neigh->ifp == ifp)
             return neigh;
     }

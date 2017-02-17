@@ -262,7 +262,7 @@ check_link_local_addresses(struct interface *ifp)
         if(rc == ifp->numll) {
             changed = 0;
             for(i = 0; i < rc; i++) {
-                if(v6_equal(ifp->ll[i], ll[i].prefix) != 0) {
+                if(v6_nequal(ifp->ll[i], ll[i].prefix)) {
                     changed = 1;
                     break;
                 }
@@ -552,7 +552,7 @@ interface_ll_address(struct interface *ifp, const unsigned char *address)
         return 0;
 
     for(i = 0; i < ifp->numll; i++)
-        if(v6_equal(ifp->ll[i], address) == 0)
+        if(v6_equal(ifp->ll[i], address))
             return 1;
 
     return 0;

@@ -1,3 +1,26 @@
+* Corrected major thinko and logic error
+
+C false = 0
+  true = 1
+
+memcmp returns 0 if the two strings are equal.
+
+And elsewhere, we relied on memcmp's sorting behavior
+
+* Looking at the code
+
+when we move stuff to unreach appears to be a source of problems...
+sometimes... On both arm and 
+** doing stuff during a grace period?
+** Specifying the ifindex when that doesnt exist anymore?
+
+** Ideas
+*** push the failure to a retry queue
+
+*** Try to duplicate the failing behavior with iproute
+*** try to do the change atomically 
+Which is what I wanted to be doing anyway!
+*** use expire
 * And finally after all this work
 
 I finally got to where solving for bellman-ford showed up in the
