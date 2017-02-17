@@ -37,14 +37,14 @@ static inline int v6_equal2 (const unsigned char *p1,
         const unsigned long *up1 = (const unsigned long *)p1;
         const unsigned long *up2 = (const unsigned long *)p2;
 
-        return ((up1[0] ^ up2[0]) | (up1[1] ^ up2[1])) == 0UL;
+        return !((up1[0] ^ up2[0]) | (up1[1] ^ up2[1]));
 #else
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
-	return ((up1[0] ^ up2[0]) |
+	return !((up1[0] ^ up2[0]) |
                 (up1[1] ^ up2[1]) |
                 (up1[2] ^ up2[2]) |
-                (up1[3] ^ up2[3])) == 0;
+                (up1[3] ^ up2[3]));
 #endif
 }
 
@@ -186,7 +186,7 @@ int main() {
         // And that could be what I'm doing wrong in all those debug statements
         // and format_prefix seems to buffer 4 times so you can call it 4 times!
 	// clever. But a little scary....
-	
+
 	printf("v4mapped print %s, ll print %s\n",format_prefix(p[MAX_PREFIX/2].prefix,
 								p[MAX_PREFIX/2].plen),
 						format_prefix(p[MAX_PREFIX/3].prefix,
