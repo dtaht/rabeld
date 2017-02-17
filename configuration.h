@@ -31,10 +31,10 @@ THE SOFTWARE.
 #define CONFIG_ACTION_NO 5
 
 struct filter_result {
-    unsigned int add_metric; /* allow = 0, deny = INF, metric = <0..INF> */
     unsigned char *src_prefix;
-    unsigned char src_plen;
+    unsigned int add_metric; /* allow = 0, deny = INF, metric = <0..INF> */
     unsigned int table;
+    unsigned char src_plen;
 };
 
 struct filter {
