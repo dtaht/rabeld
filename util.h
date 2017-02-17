@@ -238,13 +238,13 @@ linklocal(const unsigned char *address)
 }
 
 static inline int
-v4mapped(const unsigned char *address)
+v4mapped2(const unsigned char *address)
 {
     return memcmp(address, v4prefix, 12) == 0;
 }
 
-static inline int
-v4mapped2(const unsigned char *address)
+static inline size_t
+v4mapped(const unsigned char *address)
 {
 #ifdef  HAVE_64BIT_ARCH
     const unsigned long *up1 = (const unsigned long *) address;
