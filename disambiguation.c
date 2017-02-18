@@ -152,14 +152,9 @@ min_conflict(const struct zone *zone, const struct babel_route *rt)
         fprintf(stderr, "Couldn't allocate route stream.\n");
         return NULL;
     }
-    majortimeout=0;
     while(1) {
         rt1 = route_stream_next(stream);
         if(rt1 == NULL) break;
-	if(majortimeout == 1) {
-		fprintf(stderr, "Aiiii! computation took too long\n");
-		break;
-	}
         if(!(conflicts(rt, rt1) &&
              zone_equal(inter(rt, rt1, &curr_zone), zone)))
              continue;
