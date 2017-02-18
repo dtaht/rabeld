@@ -122,7 +122,7 @@ static inline int v6_equal2 (const unsigned char *p1,
 
 static inline int v6_nequal2 (const unsigned char *p1,
                             const unsigned char *p2) {
-       return memcmp(p1,p2,16) != 0;
+       return memcmp(p1,p2,16) ;
 
 }
 
@@ -130,27 +130,27 @@ static inline int v6_nequal2 (const unsigned char *p1,
 // I want to get away from the comparison here
 // if I make this a size_t instead, what happens?
 
-static inline size_t v6_equal (const unsigned char *p1,
+static inline size_t v6_nequal (const unsigned char *p1,
                                    const unsigned char *p2)
 {
 #ifdef  HAVE_64BIT_ARCH
         const unsigned long *up1 = (const unsigned long *)p1;
         const unsigned long *up2 = (const unsigned long *)p2;
 
-        return !((up1[0] ^ up2[0]) | (up1[1] ^ up2[1]));
+        return ((up1[0] ^ up2[0]) | (up1[1] ^ up2[1]));
 #else
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
-	return !((up1[0] ^ up2[0]) |
+	return ((up1[0] ^ up2[0]) |
                 (up1[1] ^ up2[1]) |
                 (up1[2] ^ up2[2]) |
                 (up1[3] ^ up2[3]));
 #endif
 }
 
-static inline size_t v6_nequal (const unsigned char *p1,
+static inline size_t v6_equal (const unsigned char *p1,
                                    const unsigned char *p2) {
-return !v6_equal(p1,p2);
+	return !v6_nequal(p1,p2);
 }
 
 static inline size_t v6_nequal8 (const unsigned char *p1,
