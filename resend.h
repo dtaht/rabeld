@@ -29,16 +29,16 @@ THE SOFTWARE.
 
 struct resend {
     struct resend *next;
-    unsigned char kind; // as an int this might suck less
-    unsigned char max;
+    unsigned char id[8];
+    unsigned char kind;
     unsigned char plen;
     unsigned char src_plen;
+    unsigned char max;
     unsigned char prefix[16];
     unsigned char src_prefix[16];
     unsigned short delay;
     struct timeval time;
     unsigned short seqno;
-    unsigned char id[8];
     struct interface *ifp;
 };
 
