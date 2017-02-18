@@ -4,7 +4,17 @@ MANDIR = $(PREFIX)/share/man
 #CDEBUGFLAGS = -std=c11 -O3 -pg -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
 CDEBUGFLAGS = -std=gnu99 -Wall -O3 -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
 
-DEFINES = $(PLATFORM_DEFINES)
+# FIXME for cross compilation
+ARCH=$(shell uname -m)
+ifeq ($(ARCH),armv7l)
+NEON=-DHAVE_NEON -mfpu=neon
+endif
+
+ifeq ($(ARCH),x86_64)
+X8664=-DHAVE_64BIT_ARCH
+endif
+
+DEFINES = $(PLATFORM_DEFINES) $(NEON) $(X8664)
 
 CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
