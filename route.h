@@ -27,6 +27,7 @@ THE SOFTWARE.
 #define DIVERSITY_CHANNEL 3
 
 struct babel_route {
+    struct babel_route *next;
     struct source *src;
     unsigned short refmetric;
     unsigned short cost;
@@ -42,7 +43,6 @@ struct babel_route {
     short installed;
     short channels_len;
     unsigned char *channels;
-    struct babel_route *next;
 };
 
 #define ROUTE_ALL 0
