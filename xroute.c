@@ -393,6 +393,6 @@ check_xroutes(int send_updates)
     free(routes);
     if(maxroutes >= maxmaxroutes)
         return -1;
-    maxroutes = MIN(maxmaxroutes, 2 * maxroutes);
+    maxroutes = MIN(maxmaxroutes, 4 * maxroutes);
     goto again;
 }
