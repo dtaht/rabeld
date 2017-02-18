@@ -153,7 +153,6 @@ min_conflict(const struct zone *zone, const struct babel_route *rt)
         return NULL;
     }
     majortimeout=0;
-    alarm(2);
     while(1) {
         rt1 = route_stream_next(stream);
         if(rt1 == NULL) break;
@@ -166,7 +165,6 @@ min_conflict(const struct zone *zone, const struct babel_route *rt)
              continue;
         min = min_route(rt1, min);
     }
-    alarm(0); majortimeout = 0;
     route_stream_done(stream);
     return min;
 }
