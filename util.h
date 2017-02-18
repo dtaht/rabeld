@@ -130,6 +130,7 @@ static inline int v6_nequal2 (const unsigned char *p1,
 // I want to get away from the comparison here
 // if I make this a size_t instead, what happens?
 
+#ifndef HAVE_NEON
 static inline size_t v6_nequal (const unsigned char *p1,
                                    const unsigned char *p2)
 {
@@ -147,12 +148,6 @@ static inline size_t v6_nequal (const unsigned char *p1,
                 (up1[3] ^ up2[3]));
 #endif
 }
-
-static inline size_t v6_equal (const unsigned char *p1,
-                                   const unsigned char *p2) {
-	return !v6_nequal(p1,p2);
-}
-
 static inline size_t v6_nequal8 (const unsigned char *p1,
                                    const unsigned char *p2)
 {
@@ -173,7 +168,7 @@ static inline size_t v6_nequal8 (const unsigned char *p1,
 static inline int v6_nequal12 (const unsigned char *p1,
                                    const unsigned char *p2)
 {
-#ifdef  HAVE_64BIT_ARCH2
+#ifdef  HAVE_64BIT_ARCH
         const unsigned long *up1 = (const unsigned long *)p1;
         const unsigned long *up2 = (const unsigned long *)p2;
         const unsigned int *ip1 = (const unsigned int *) (&p1[8]);
@@ -183,10 +178,35 @@ static inline int v6_nequal12 (const unsigned char *p1,
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
 	return ((up1[0] ^ up2[0]) |
-                (up1[1] ^ up2[1]) |  
+                (up1[1] ^ up2[1]) |
 		(up1[2] ^ up2[2]));
 #endif
 }
+#else
+#include <arm_neon.h>
+
+// FIXME, I still don't understand this magic, nor do
+// I like the name. Isn't it just returning the max value?
+
+inline static uint32_t is_not_zero(uint32x4_t v)
+{
+    uint32x2_t tmp = vorr_u32(vget_low_u32(v), vget_high_u32(v));
+    return vget_lane_u32(vpmax_u32(tmp, tmp), 0);
+}
+
+static inline size_t v6_nequal (const unsigned char *p1,
+				const unsigned char *p2) {
+	uint32x4_t up1 = vld1q_u32((const unsigned int *) p1);
+        uint32x4_t up2 = vld1q_u32((const unsigned int *) p2);
+	return is_not_zero(veorq_u32(up1,up2));
+}
+#endif
+
+static inline size_t v6_equal (const unsigned char *p1,
+                                   const unsigned char *p2) {
+	return !v6_nequal(p1,p2);
+}
+
 
 
 void timeval_add_msec(struct timeval *d,
@@ -226,6 +246,10 @@ enum prefix_status {
 };
 
 // These make sense as inlines
+// is_v4mapped could be less code
+// v4 = plen >= 96 && v4mapped(prefix);
+// What I kind of like about this check is that
+// I end up getting the prefix into reg
 
 extern const unsigned char v4prefix[16];
 extern const unsigned char llprefix[16];
@@ -273,6 +297,9 @@ prefix_cmp(const unsigned char *p1, unsigned char plen1,
 {
     int plen = MIN(plen1, plen2);
 
+    // FIXME: I don't understand why we have to do this comparison
+    // It gets handled later, essentially merely by comparing prefixes
+
     if(v4mapped(p1) != v4mapped(p2))
         return PST_DISJOINT;
 
@@ -281,10 +308,14 @@ prefix_cmp(const unsigned char *p1, unsigned char plen1,
 
     if(plen % 8 != 0) {
         int i = plen / 8 + 1;
+	// FIXME - does the shift differ for endianness?
         unsigned char mask = (0xFF << (plen % 8)) & 0xFF;
         if((p1[i] & mask) != (p2[i] & mask))
             return PST_DISJOINT;
     }
+    // FIXME: I don't see how we ever get here. Ah:
+    // fd99::1:/60
+    // fd99::1:/64
 
     if(plen1 < plen2)
         return PST_LESS_SPECIFIC;
