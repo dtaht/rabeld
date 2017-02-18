@@ -638,7 +638,7 @@ main(int argc, char **argv)
 	    if(majortimeout == 1) {
 		fprintf(stderr,"Eiiiii! major timeout, do something!\n");
 		majortimeout = 0;
-	    } 
+	    }
 	    alarm(0);
 interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0) {
@@ -689,7 +689,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"Interface processing major timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	    } 
+	    }
 
         if(local_server_socket >= 0 && FD_ISSET(local_server_socket, &readfds))
            accept_local_connections();
@@ -730,7 +730,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"kernel_link major timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	    } 
+	    }
 
         if(kernel_routes_changed || kernel_addr_changed ||
            kernel_rules_changed || now.tv_sec >= kernel_dump_time) {
@@ -752,7 +752,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"routeschanged timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	    } 
+	    }
 
         if(timeval_compare(&check_neighbours_timeout, &now) < 0) {
             int msecs;
@@ -771,7 +771,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"something timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	    } 
+	    }
 
         if(now.tv_sec >= expiry_time) {
             expire_routes();
@@ -783,7 +783,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"expired timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	} 
+	}
         if(now.tv_sec >= source_expiry_time) {
             expire_sources();
             source_expiry_time = now.tv_sec + roughly(300);
@@ -803,7 +803,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"hello timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	} 
+	}
 
 
         if(resend_time.tv_sec != 0) {
@@ -815,7 +815,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"resend timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	} 
+	}
 
         if(unicast_flush_timeout.tv_sec != 0) {
             if(timeval_compare(&now, &unicast_flush_timeout) >= 0)
@@ -835,12 +835,12 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 		fprintf(stderr,"flush timeout, do something!\n");
 		majortimeout = 0;
 		alarm(2);
-	} 
+	}
         if(UNLIKELY(debug || dumping)) {
             dump_tables(stdout);
             dumping = 0;
         }
-	alarm(0); 
+	alarm(0);
 	majortimeout = 0;
     }
 
