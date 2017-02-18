@@ -593,13 +593,13 @@ main(int argc, char **argv)
     }
 
     debugf("Entering main loop.\n");
-
+    majortimeout = 0;
     while(1) {
         struct timeval tv;
         fd_set readfds;
 
         gettime(&now);
-
+	alarm(2);
         tv = check_neighbours_timeout;
         timeval_min(&tv, &check_interfaces_timeout);
         timeval_min_sec(&tv, expiry_time);
@@ -635,18 +635,21 @@ main(int argc, char **argv)
                 FD_SET(local_sockets[i].fd, &readfds);
                 maxfd = MAX(maxfd, local_sockets[i].fd);
             }
-            rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
+	    if(majortimeout == 1) {
+		fprintf(stderr,"Eiiiii! major timeout, do something!\n");
+		majortimeout = 0;
+	    } 
+	    alarm(0);
+interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0) {
-                if(errno != EINTR) {
-                    perror("select");
-                    sleep(1);
-                }
+                if(errno == EINTR) goto interrupted;
                 rc = 0;
                 FD_ZERO(&readfds);
             }
         }
 
         gettime(&now);
+	alarm(2);
 
         if(exiting)
             break;
@@ -667,7 +670,6 @@ main(int argc, char **argv)
             if(rc < 0) {
                 if(errno != EAGAIN && errno != EINTR) {
                     perror("recv");
-                    sleep(1);
                 }
             } else {
                 FOR_ALL_INTERFACES(ifp) {
@@ -683,6 +685,11 @@ main(int argc, char **argv)
                 }
             }
         }
+	if(majortimeout == 1) {
+		fprintf(stderr,"Interface processing major timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	    } 
 
         if(local_server_socket >= 0 && FD_ISSET(local_server_socket, &readfds))
            accept_local_connections();
@@ -719,6 +726,11 @@ main(int argc, char **argv)
             check_interfaces();
             kernel_link_changed = 0;
         }
+	if(majortimeout == 1) {
+		fprintf(stderr,"kernel_link major timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	    } 
 
         if(kernel_routes_changed || kernel_addr_changed ||
            kernel_rules_changed || now.tv_sec >= kernel_dump_time) {
@@ -736,6 +748,12 @@ main(int argc, char **argv)
                 kernel_dump_time = now.tv_sec + roughly(30);
         }
 
+	if(majortimeout == 1) {
+		fprintf(stderr,"routeschanged timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	    } 
+
         if(timeval_compare(&check_neighbours_timeout, &now) < 0) {
             int msecs;
             msecs = check_neighbours();
@@ -749,12 +767,23 @@ main(int argc, char **argv)
             schedule_interfaces_check(30000, 1);
         }
 
+	if(majortimeout == 1) {
+		fprintf(stderr,"something timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	    } 
+
         if(now.tv_sec >= expiry_time) {
             expire_routes();
             expire_resend();
             expiry_time = now.tv_sec + roughly(30);
         }
 
+	if(majortimeout == 1) {
+		fprintf(stderr,"expired timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	} 
         if(now.tv_sec >= source_expiry_time) {
             expire_sources();
             source_expiry_time = now.tv_sec + roughly(300);
@@ -770,11 +799,23 @@ main(int argc, char **argv)
             if(timeval_compare(&now, &ifp->update_flush_timeout) >= 0)
                 flushupdates(ifp);
         }
+	if(majortimeout == 1) {
+		fprintf(stderr,"hello timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	} 
+
 
         if(resend_time.tv_sec != 0) {
             if(timeval_compare(&now, &resend_time) >= 0)
                 do_resend();
         }
+
+	if(majortimeout == 1) {
+		fprintf(stderr,"resend timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	} 
 
         if(unicast_flush_timeout.tv_sec != 0) {
             if(timeval_compare(&now, &unicast_flush_timeout) >= 0)
@@ -790,10 +831,17 @@ main(int argc, char **argv)
             }
         }
 
+	if(majortimeout == 1) {
+		fprintf(stderr,"flush timeout, do something!\n");
+		majortimeout = 0;
+		alarm(2);
+	} 
         if(UNLIKELY(debug || dumping)) {
             dump_tables(stdout);
             dumping = 0;
         }
+	alarm(0); 
+	majortimeout = 0;
     }
 
     debugf("Exiting...\n");
