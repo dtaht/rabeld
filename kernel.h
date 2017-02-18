@@ -33,6 +33,9 @@ struct kernel_route {
     unsigned char plen; // FIXME: why were these ints?
     unsigned char src_plen; /* no source prefix <=> src_plen == 0 */
     unsigned char proto; // This is an unsigned char in the real world
+	// But we use -2 to indicate we have an internal route: which conflicts with gated/aggr
+	// So we could go back to a short here - if I wasn't so puzzled about why we
+	// keep having routes end up being static.
     unsigned char pad;
     int metric;
     unsigned int ifindex;
