@@ -385,12 +385,24 @@ flush_interface_routes(struct interface *ifp, int v4only)
     }
 }
 
-struct route_stream {
-    int installed;
-    int index;
+// I am tempted to put the bloody extra bits into 
+// the next pointer, cause we don't need 'em.
+// Which someone would kill me for using.
+// Or use the top few bits of the installed int
+
+/* struct route_stream {
+    unsigned index:29;
+    unsigned installed:3;
     struct babel_route *next;
 };
 
+*/
+
+struct route_stream {
+    int index;
+    int installed;
+    struct babel_route *next;
+};
 
 struct route_stream *
 route_stream(int which)
@@ -411,11 +423,15 @@ route_stream(int which)
     return stream;
 }
 
+// Don't see how adding a prefetch to either of these will help
+
 struct babel_route *
 route_stream_next(struct route_stream *stream)
 {
     if(stream->installed) {
-        while(stream->index < route_slots)
+        while(stream->index < route_slots) {
+	// this might go boom in some rare cases
+	//  __builtin_prefetch(routes[stream->index+1],0,1)
             if(stream->installed == ROUTE_SS_INSTALLED &&
                routes[stream->index]->src->src_plen == 0)
                 return NULL;
@@ -423,7 +439,7 @@ route_stream_next(struct route_stream *stream)
                 break;
             else
                 stream->index++;
-
+	}
         if(stream->index < route_slots)
             return routes[stream->index++];
         else
@@ -437,6 +453,7 @@ route_stream_next(struct route_stream *stream)
             stream->next = routes[stream->index];
         }
         next = stream->next;
+	__builtin_prefetch(next,0,1);
         stream->next = next->next;
         return next;
     }
