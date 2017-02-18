@@ -141,9 +141,10 @@ update_neighbour(struct neighbour *neigh, int hello, int hello_interval)
                     neigh->reach <<= -missed_hellos;
                     missed_hellos = 0;
                 } else {
-                    /* Late hello.  Probably due to the link layer buffering
-                       packets during a link outage.  Ignore it, but reset
-                       the expected seqno. */
+                    /* Late hello. Probably due to the link layer buffering
+                       packets during a link outage or overload. Ignore it, but
+                       reset the expected seqno. */
+			fprintf(stderr,"Got a late hello - the other side is overbuffered\n");
                     neigh->hello_seqno = hello;
                     hello = -1;
                     missed_hellos = 0;
