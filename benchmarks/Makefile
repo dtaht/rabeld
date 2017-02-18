@@ -2,6 +2,8 @@
 
 PROGS=bench_Os bench_O1 bench_O2 bench_O3
 PROGS+=bench64_Os bench64_O1 bench64_O2 bench64_O3
+PROGS+=bench_Os_neon bench_O3_neon
+NEON=-DHAVE_NEON -mfloat-abi=hard -mfpu=neon
 
 SRC=benchmark.c benchmark_data.c
 #CFLAGS=-std=c11 -g -Wall c11 doesn't have the !@# endian macros
@@ -27,6 +29,13 @@ bench64_O2: $(SRC)
 	$(CC) $(CFLAGS) -O2 $(H64) $(SRC) -o $@
 bench64_O3: $(SRC)
 	$(CC) $(CFLAGS) -O3 $(H64) $(SRC) -o $@
+
+bench_Os_neon: $(SRC)
+	$(CC) $(CFLAGS) -S -Os $(NEON) benchmark.c -o $@
+
+bench_O3_neon: $(SRC)
+	$(CC) $(CFLAGS) -S -O3 $(NEON) benchmark.c -o $@
+
 
 #run: 	$(PROGS)
 #	OUTPUT= $(foreach p,$(PROGS),$(shell ./$(p))) ## well it seemed like a good idea

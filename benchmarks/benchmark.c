@@ -10,6 +10,14 @@
 #include <memory.h>
 #include <endian.h>
 #include <arpa/inet.h>
+#ifdef HAVE_NEON
+#include <arm_neon.h>
+inline static uint32_t is_not_zero(uint32x4_t v)
+{
+    uint32x2_t tmp = vorr_u32(vget_low_u32(v), vget_high_u32(v));
+    return vget_lane_u32(vpmax_u32(tmp, tmp), 0);
+}
+#endif
 
 #define MAX_PREFIX 1024
 
@@ -39,12 +47,18 @@ static inline int v6_equal2 (const unsigned char *p1,
 
         return !((up1[0] ^ up2[0]) | (up1[1] ^ up2[1]));
 #else
+#ifdef  HAVE_NEON
+	uint32x4_t up1 = vld1q_u32((const unsigned int *) p1);
+        uint32x4_t up2 = vld1q_u32((const unsigned int *) p2);
+	return !is_not_zero(veorq_u32(up1,up2));
+#else
         const unsigned int *up1 = (const unsigned int *)p1;
         const unsigned int *up2 = (const unsigned int *)p2;
 	return !((up1[0] ^ up2[0]) |
                 (up1[1] ^ up2[1]) |
                 (up1[2] ^ up2[2]) |
                 (up1[3] ^ up2[3]));
+#endif
 #endif
 }
 
