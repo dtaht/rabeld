@@ -1,4 +1,72 @@
- Coimparison
+SO what I want to do is advertise increasingly a larger route update interval
+for all stuff based on the available bandwidth.
+
+As time allows - but always update my most local addresses and my
+source specific routes more frequently. 
+
+New compression format
+
+*   o  otherwise (i.e., if either the update is feasible or the entry is
+      not currently installed), then the entry's sequence number,
+      advertised metric, metric, and router-id are updated and, unless
+      the advertised metric is infinite, the route's expiry timer is
+      reset to a small multiple of the Interval value included in the
+      update.
+
+   When a route's expiry timer triggers, the behaviour depends on
+   whether the route's metric is finite.  If the metric is finite, it is
+   set to infinity and the expiry timer is reset.  If the metric is
+   already infinite, the route is flushed from the route table.
+
+
+* bound the work that babeld does with netlink
+
+And that looks hard, we are parsing a kernel_dump
+
+How about using ever bigger expiry timers to spread the future load?
+
+* Then other shit starts to fail
+
+hello timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+
+* Dunno
+
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+
+* Routes changed timeout!
+
+Also at one ppint
+
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 13) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+
+* memcmp killage - for 8 byte
+  convert router_id to 8 byte natural type
+  roll 4 prefix compare routine
+  check that shift mask
+  measure total time to process
+
+* Comparison
 
 ** x86 box running rabeld - 500 stuck unreachable routes
 ** Arm running stock babeld - 0
