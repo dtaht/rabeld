@@ -42,6 +42,7 @@ struct interface_conf {
     unsigned hello_interval;
     unsigned update_interval;
     unsigned short cost;
+//    unsigned short speed;
     char type;
     char split_horizon;
     char lq;
