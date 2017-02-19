@@ -1,3 +1,102 @@
+* Possible -O3 bug
+I don't get timestamps from the arms!!!
+
+* Coulnd't find this page
+The possible workaround is to open the Network settings, select the IPv6
+parameters page of your connection, click the Routes button and check "Ignore
+automatically obtained routes".
+
+* Idea
+
+redistribute proto X metric +128 stagger 6000 interval 600000
+
+Add +128 to the base metric for the interface. (is that what happens now)?
+stagger the announcements from this proto over 60 seconds, and don't
+expire them for 60 minutes.
+
+when you pull from the kernel dump table, randomize the first announcement
+by 0-60 of each route. 
+
+Another method might be to "splay" routes across the interfaces, only announcing
+some each.
+
+* Now I need to figure out how to live without network manager
+
+kill it dead on the chips, desktop, and servers... while still keeping
+wifi working.
+
+* So I killed networkmanager!
+
+and the all the unreachable routes and static routes went away.
+All the messages went away. It was network mangaer the whole time.
+
+Now we're down to bufferbloat killing things 
+- need to fix wifi multicast. add fq and drop head.
+- need to measure rtt and overlong ehellos when I have too much cpu
+- need to handle that route dump better overall
+- need to look at odhcpd and see what happens
+- like the expand the expiry idea for a *LOT* of reasons.
+- unicast route transfers
+Ah, well, writing the neon code was *fun*
+
+* What is the right netmask and broadcast address?
+
+I'm perpetually having to explicitly export the local address in babeld.conf,
+and perhaps it's due to overhelpful mismanagement of the netmask by
+various drivers.
+
+root@pi2:~/rabeld# ifconfig wlan0
+172.26.96.104 netmask 255.255.255.255 root@pi2:~/rabeld# ifconfig wlan0 wlan0
+Link encap:Ethernet HWaddr 9c:ef:d5:ff:45:46 inet addr:172.26.96.104
+Bcast:172.26.255.255 Mask:255.255.0.0 inet6 addr: fe80::aa4c:801f:57dd:220e/64
+Scope:Link UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1 RX packets:33608
+errors:0 dropped:0 overruns:0 frame:0 TX packets:21603 errors:0 dropped:0
+overruns:0 carrier:0 collisions:0 txqueuelen:1000 RX bytes:49163303 (46.8 MiB)
+TX bytes:1966138 (1.8 MiB)
+
+
+* And one half of the bug turns out to be network manager
+
+My desktops and servers run network-manager but I thought - essentially
+disabled. 
+
+https://wiki.reseaulibre.ca/documentation/babel/
+https://bugzilla.gnome.org/show_bug.cgi?id=682616
+
+* And the pi3 (32bit) managed 11000 routes without a qualm
+
+with the new code. Hadn't tried it before with the older code, either, but it
+just motored along....
+
+It's only on ethernet. I think a core issue is the speed of updates over wifi.
+
+I do see it noticing getting late hellos.
+
+the chips fell over. I may well have a kernel bug on the x86. Sigh. Time to
+build net-next again.
+
+root@pi3:~# ip -6 route | grep babel | wc -l
+11925
+
+a struggling box has 1.6 of delay getting stuff out!!
+
+add neighbour 1e0f530 address fe80::32b5:c2ff:fe75:7faa if enp3s0 reach ffef rxcost 96 txcost 282 rtt 1843.822 rttcost 0 cost 282
+quit
+
+The pi3 is my new best friend. I think the chip
+is compiled for thumb
+
+   1303c:       f4642a8f        vld1.32 {d18-d19}, [r4]
+   13040:       f4630a8f        vld1.32 {d16-d17}, [r3]
+   13044:       f34201f0        veor    q8, q9, q8
+   13048:       f26101b0        vorr    d16, d17, d16
+   1304c:       f3600aa0        vpmax.u32       d16, d16, d16
+   13050:       ee103b90        vmov.32 r3, d16[0]
+
+
+* bla
+
+
 SO what I want to do is advertise increasingly a larger route update interval
 for all stuff based on the available bandwidth.
 
