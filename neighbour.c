@@ -144,6 +144,9 @@ update_neighbour(struct neighbour *neigh, int hello, int hello_interval)
                     /* Late hello. Probably due to the link layer buffering
                        packets during a link outage or overload. Ignore it, but
                        reset the expected seqno. */
+		    /* FIXME: An overbuffered neighbor should get its metric
+                              bumped up so someone else can take the load off.
+                              This msg should also print the delay here. */
 			fprintf(stderr,
 			"Late hello: overbuffered neighbor %s\n", neigh->address);
                     neigh->hello_seqno = hello;
