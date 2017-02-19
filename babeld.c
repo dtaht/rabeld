@@ -95,11 +95,23 @@ static int kernel_addr_changed = 0;
 struct timeval check_neighbours_timeout, check_interfaces_timeout;
 
 static volatile sig_atomic_t exiting = 0, dumping = 0, reopening = 0;
-volatile sig_atomic_t majortimeout = 0;
 
 static int accept_local_connections(void);
 static void init_signals(void);
 static void dump_tables(FILE *out);
+
+volatile sig_atomic_t majortimeout = 0;
+
+int
+check_major_timeout(int tryagainsecs, char *msg) {
+    if(majortimeout == 1) {
+	fprintf(stderr,"%s\n", msg);
+        majortimeout = 0;
+        alarm(tryagainsecs);
+	return 1;
+	}
+    return 0;
+}
 
 static int
 kernel_route_notify(struct kernel_route *route, void *closure)
@@ -635,10 +647,7 @@ main(int argc, char **argv)
                 FD_SET(local_sockets[i].fd, &readfds);
                 maxfd = MAX(maxfd, local_sockets[i].fd);
             }
-	    if(majortimeout == 1) {
-		fprintf(stderr,"Eiiiii! major timeout, do something!\n");
-		majortimeout = 0;
-	    }
+	    check_major_timeout(2,"Timeout processing setup");
 	    alarm(0);
 interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0) {
@@ -685,11 +694,7 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
                 }
             }
         }
-	if(majortimeout == 1) {
-		fprintf(stderr,"Interface processing major timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	    }
+	check_major_timeout(2,"Timeout: Interface processing took too long");
 
         if(local_server_socket >= 0 && FD_ISSET(local_server_socket, &readfds))
            accept_local_connections();
@@ -726,12 +731,8 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             check_interfaces();
             kernel_link_changed = 0;
         }
-	if(majortimeout == 1) {
-		fprintf(stderr,"kernel_link major timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	    }
-
+	check_major_timeout(2,"Timeout: Kernel_link checking took too long");
+	
         if(kernel_routes_changed || kernel_addr_changed ||
            kernel_rules_changed || now.tv_sec >= kernel_dump_time) {
             rc = check_xroutes(1);
@@ -748,11 +749,8 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
                 kernel_dump_time = now.tv_sec + roughly(30);
         }
 
-	if(majortimeout == 1) {
-		fprintf(stderr,"routeschanged timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	    }
+	check_major_timeout(2,
+            "Timeout: Xroute/Route/Rules processing took too long");
 
         if(timeval_compare(&check_neighbours_timeout, &now) < 0) {
             int msecs;
@@ -767,11 +765,8 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             schedule_interfaces_check(30000, 1);
         }
 
-	if(majortimeout == 1) {
-		fprintf(stderr,"something timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	    }
+	check_major_timeout(2,
+            "Timeout: Interface checking took too long");
 
         if(now.tv_sec >= expiry_time) {
             expire_routes();
@@ -779,11 +774,9 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             expiry_time = now.tv_sec + roughly(30);
         }
 
-	if(majortimeout == 1) {
-		fprintf(stderr,"expired timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	}
+	check_major_timeout(2,
+            "Timeout: Route expiry/resend took too long");
+
         if(now.tv_sec >= source_expiry_time) {
             expire_sources();
             source_expiry_time = now.tv_sec + roughly(300);
@@ -799,23 +792,16 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             if(timeval_compare(&now, &ifp->update_flush_timeout) >= 0)
                 flushupdates(ifp);
         }
-	if(majortimeout == 1) {
-		fprintf(stderr,"hello timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	}
-
+	check_major_timeout(2,
+            "Timeout: send_hello send_update, flushupdates took too long");
 
         if(resend_time.tv_sec != 0) {
             if(timeval_compare(&now, &resend_time) >= 0)
                 do_resend();
         }
 
-	if(majortimeout == 1) {
-		fprintf(stderr,"resend timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	}
+	check_major_timeout(2,
+            "Timeout: resend took too long");
 
         if(unicast_flush_timeout.tv_sec != 0) {
             if(timeval_compare(&now, &unicast_flush_timeout) >= 0)
@@ -831,11 +817,9 @@ interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             }
         }
 
-	if(majortimeout == 1) {
-		fprintf(stderr,"flush timeout, do something!\n");
-		majortimeout = 0;
-		alarm(2);
-	}
+	check_major_timeout(2,
+            "Timeout: buffer flush took too long");
+
         if(UNLIKELY(debug || dumping)) {
             dump_tables(stdout);
             dumping = 0;
