@@ -1,5 +1,10 @@
-* Possible -O3 bug
-I don't get timestamps from the arms!!!
+* Bug introduced
+
+I don't get timestamps from the arms anymore.
+
+bisect needed
+
+It's really amazing I didn't break more than this along the way.
 
 * Coulnd't find this page
 The possible workaround is to open the Network settings, select the IPv6
