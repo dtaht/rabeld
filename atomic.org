@@ -1,3 +1,7 @@
+* Ah. Unicast IHU is not compatable.
+
+I forgot about that. Grump
+
 * Bug introduced
 
 I don't get timestamps from the arms anymore.
@@ -58,7 +62,6 @@ Scope:Link UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1 RX packets:33608
 errors:0 dropped:0 overruns:0 frame:0 TX packets:21603 errors:0 dropped:0
 overruns:0 carrier:0 collisions:0 txqueuelen:1000 RX bytes:49163303 (46.8 MiB)
 TX bytes:1966138 (1.8 MiB)
-
 
 * And one half of the bug turns out to be network manager
 
