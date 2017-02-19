@@ -1,8 +1,14 @@
-* Ah. Unicast IHU is not compatable.
+* TODO I made the route table more exponential but
 
-I forgot about that. Grump
+forgot it uses calloc, so it brings in all the memory which cannot then
+be discarded. I could revert to malloc here instead, or merely scale additional
+resizes to be less exponential... or go back to the previous method
 
-* Bug introduced
+* DONE Ah. Unicast IHU is not compatable with timestamping.
+
+I forgot about that. Grump. Reverted for now - I really need RTT.
+
+* DONE Bug introduced with timestamping
 
 I don't get timestamps from the arms anymore.
 
@@ -11,6 +17,7 @@ bisect needed
 It's really amazing I didn't break more than this along the way.
 
 * Coulnd't find this page
+
 The possible workaround is to open the Network settings, select the IPv6
 parameters page of your connection, click the Routes button and check "Ignore
 automatically obtained routes".
@@ -24,17 +31,19 @@ stagger the announcements from this proto over 60 seconds, and don't
 expire them for 60 minutes.
 
 when you pull from the kernel dump table, randomize the first announcement
-by 0-60 of each route. 
+by 0-60 of each route and do not announce it immediately. This will minimize
+the burst on the network (and also minimize future burps on announcing them,
+except when you are requested to do a route dump)
 
 Another method might be to "splay" routes across the interfaces, only announcing
-some each.
+some each based on the bandwidth available to each interface.
 
-* Now I need to figure out how to live without network manager
+* TODO Now I need to figure out how to live without network manager
 
 kill it dead on the chips, desktop, and servers... while still keeping
 wifi working.
 
-* So I killed networkmanager!
+* TODO So I killed networkmanager!
 
 and the all the unreachable routes and static routes went away.
 All the messages went away. It was network mangaer the whole time.
@@ -48,7 +57,7 @@ Now we're down to bufferbloat killing things
 - unicast route transfers
 Ah, well, writing the neon code was *fun*
 
-* What is the right netmask and broadcast address?
+* TODO What is the right netmask and broadcast address?
 
 I'm perpetually having to explicitly export the local address in babeld.conf,
 and perhaps it's due to overhelpful mismanagement of the netmask by
@@ -104,7 +113,6 @@ is compiled for thumb
 
 * bla
 
-
 SO what I want to do is advertise increasingly a larger route update interval
 for all stuff based on the available bandwidth.
 
@@ -113,7 +121,8 @@ source specific routes more frequently.
 
 New compression format
 
-*   o  otherwise (i.e., if either the update is feasible or the entry is
+* TODO ask list about expires timers
+o  otherwise (i.e., if either the update is feasible or the entry is
       not currently installed), then the entry's sequence number,
       advertised metric, metric, and router-id are updated and, unless
       the advertised metric is infinite, the route's expiry timer is
@@ -125,6 +134,8 @@ New compression format
    set to infinity and the expiry timer is reset.  If the metric is
    already infinite, the route is flushed from the route table.
 
+I think there is a hole in the spec here in that what the "reflecting" routers
+should broadcast as their interval for updating the the expiry timer.
 
 * bound the work that babeld does with netlink
 
