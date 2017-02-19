@@ -1,7 +1,7 @@
 #!/bin/sh
 
-END=40000
-P=fd44:0:0:%x::/64
+END=10000
+P=fd41:0:0:%x::/64
 IFACE=eno1
 CONF=routes.conf
 

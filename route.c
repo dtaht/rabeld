@@ -91,9 +91,8 @@ route_compare(const unsigned char *prefix, unsigned char plen,
 
 /*
     FIXME: don't really think we care about which way it is not equal
-    i = v6_equal(prefix, route->src->prefix);
-    if(i == false) 
-        return -2;
+    i = v6_nequal(prefix, route->src->prefix);
+    if(i) does qsort care about it being -1 or just check the sign bit?
 */
     i = memcmp(prefix, route->src->prefix, 16);
     if(i != 0 ) 
@@ -109,9 +108,8 @@ route_compare(const unsigned char *prefix, unsigned char plen,
             return -1;
     } else {
 	/* FIXME: Don't think we care greator or lessor
-        i = v6_equal(src_prefix, route->src->src_prefix);
-        if(i == false)
-            return -2;
+        i = v6_nequal(src_prefix, route->src->src_prefix);
+        if(i) return the sign bit
 	*/
         i = memcmp(src_prefix, route->src->src_prefix,16);
         if(i != 0)

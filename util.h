@@ -165,7 +165,7 @@ static inline size_t v6_nequal8 (const unsigned char *p1,
 
 // FIXME not ready yet
 
-static inline int v6_nequal12 (const unsigned char *p1,
+static inline size_t v6_nequal12 (const unsigned char *p1,
                                    const unsigned char *p2)
 {
 #ifdef  HAVE_64BIT_ARCH
@@ -200,6 +200,31 @@ static inline size_t v6_nequal (const unsigned char *p1,
         uint32x4_t up2 = vld1q_u32((const unsigned int *) p2);
 	return is_not_zero(veorq_u32(up1,up2));
 }
+/* All these casts make my eyes bleed
+
+static inline size_t v6_nequal8 (const unsigned char *p1,
+                                   const unsigned char *p2)
+{
+        const uint32x2_t *up1 = vld1_u32(const unsigned int *)p1;
+        const uint32x2_t *up2 = vld1_u32(const unsigned int *)p2;
+	uint32x2_t tmp = veor_u32(up1,up2);
+        return vget_lane_u32(vmax_u32(tmp, tmp), 0);
+}
+
+static inline size_t isnot_v4(const unsigned char* p1,
+const unsigned char plen) {
+        const uint32x2_t up1 = vld1_u32(const unsigned int *)p1;
+        ; load zeros somehow xor xor any register
+        ; xor
+        unsigned int ip1 = (const unsigned int) (p1[8]);
+        if(ip1 == htobe32(0xffff)) {
+	          then is_not_zero for the right type
+	}
+        return 1;
+}
+
+*/
+
 #endif
 
 static inline size_t v6_equal (const unsigned char *p1,
