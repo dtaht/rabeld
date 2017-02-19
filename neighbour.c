@@ -148,7 +148,8 @@ update_neighbour(struct neighbour *neigh, int hello, int hello_interval)
                               bumped up so someone else can take the load off.
                               This msg should also print the delay here. */
 			fprintf(stderr,
-			"Late hello: overbuffered neighbor %s\n", neigh->address);
+			"Late hello: overbuffered neighbor %s\n",
+			format_address(neigh->address));
                     neigh->hello_seqno = hello;
                     hello = -1;
                     missed_hellos = 0;
