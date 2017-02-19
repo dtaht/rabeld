@@ -1,3 +1,21 @@
+* TODO respond to late hellos sanely
+
+Finally - after all this optimization work - I'm close to making a logic change
+to babel.
+
+A late hello is really late! I mean 10s of seconds late.
+
+It implies we are seriously struggling but still connected. This router has
+gone suboptimal for cpu overload, overbuffering, or something else.
+
+And we *should not* ignore it - as babel does presently - because the node is
+still reachable, merely overloaded. Instead we should bump up the metric -
+possibly by a lot - to clear the overload and route around it. We should not
+disconnect that node merely because it is overloaded - nor should we ignore that
+we got that late hello.
+
+Hmm. Where to stick that logic...
+
 * TODO I made the route table more exponential but
 
 forgot it uses calloc, so it brings in all the memory which cannot then
