@@ -464,7 +464,7 @@ interface_up(struct interface *ifp, int up)
         else if(type == IF_TYPE_TUNNEL)
             ifp->flags |= IF_TIMESTAMPS;
         else
-            ifp->flags &= ~IF_TIMESTAMPS;
+            ifp->flags |= IF_TIMESTAMPS;
         if(ifp->max_rtt_penalty > 0 && !(ifp->flags & IF_TIMESTAMPS))
             fprintf(stderr,
                     "Warning: max_rtt_penalty is set "
