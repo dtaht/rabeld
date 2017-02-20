@@ -34,13 +34,13 @@ struct resend {
     unsigned char plen;
     unsigned char src_plen;
     unsigned char max;
-    unsigned char prefix[16];
+    unsigned char prefix[16]; // FIXME - still not 16 byte aligned on x86_64
     unsigned char src_prefix[16];
     unsigned short delay;
-    struct timeval time;
     unsigned short seqno;
+    struct timeval time;
     struct interface *ifp;
-};
+} CACHELINE_ALIGN;
 
 extern struct timeval resend_time;
 extern struct resend *to_resend;

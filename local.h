@@ -37,8 +37,8 @@ struct xroute;
 #define LOCAL_BUFSIZE 1024
 
 struct local_socket {
-    int fd;
     char *buf;
+    int fd;
     int n;
     int monitor;
 };

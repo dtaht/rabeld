@@ -43,7 +43,7 @@ struct babel_route {
     short installed;
     short channels_len;
     unsigned char *channels;
-};
+} CACHELINE_ALIGN;
 
 #define ROUTE_ALL 0
 #define ROUTE_INSTALLED 1

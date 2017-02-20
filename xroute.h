@@ -28,10 +28,10 @@ struct xroute {
     unsigned char plen;    // FIXME plen is unsigned char here
     unsigned char src_plen;
     unsigned short metric; // FIXME metric is a short here?
-    int expires;
     unsigned int ifindex;
+    int expires;
     unsigned char proto;
-};
+} CACHELINE_ALIGN;
 
 struct xroute_stream;
 
