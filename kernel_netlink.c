@@ -51,9 +51,12 @@ THE SOFTWARE.
 #include "configuration.h"
 
 // enum only exported by linux 4.10+
-//#ifndef RTA_EXPIRES
-//#define RTA_EXPIRES (RTA_ENCAP+1)
-//#endif 
+
+#ifdef HAVE_EXPIRES
+#ifndef RTA_EXPIRES
+#define RTA_EXPIRES (RTA_ENCAP+1)
+#endif 
+#endif
 
 #ifndef MAX_INTERFACES
 #define MAX_INTERFACES 20
@@ -1442,10 +1445,13 @@ starting off that way */
 //    give us a window to crash or restart in without retractions
 //    and also let us chew up compute. On the other hand, we 
 //    end up writing stuff to the kernel more often to refresh it.
-//    rta = RTA_NEXT(rta, len);
-//    rta->rta_len = RTA_LENGTH(sizeof(int));
-//    rta->rta_type = RTA_EXPIRES;
-//    memcpy(RTA_DATA(rta), &expires, sizeof(int));
+
+#ifdef HAVE_EXPIRES
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_EXPIRES;
+    memcpy(RTA_DATA(rta), &expires, sizeof(int));
+#endif
     rta = RTA_NEXT(rta, len);
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
@@ -1549,10 +1555,11 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
         case RTA_TABLE:
             table = *(int*)RTA_DATA(rta);
             break;
-//        case RTA_EXPIRES:
-//		printf("Got an expire!\n");
-//		route->expires = *(int*)RTA_DATA(rta);
-//            break;
+#ifdef HAVE_EXPIRES
+        case RTA_EXPIRES:
+		route->expires = *(int*)RTA_DATA(rta);
+            break;
+#endif
         default:
             break;
         }
