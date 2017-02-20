@@ -23,6 +23,20 @@ THE SOFTWARE.
 #define _BABEL_UTIL
 #include <endian.h>
 
+#if defined(HAVE_NEON)
+#ifndef HAVE_64BIT_ARCH
+#define CACHELINE_ALIGN __attribute__((aligned(32)))
+#else
+#define CACHELINE_ALIGN __attribute__((aligned(64)))
+#endif
+
+#else
+#if defined(HAVE_64BIT_ARCH)
+#define CACHELINE_ALIGN __attribute__((aligned(64)))
+#else
+#define CACHELINE_ALIGN __attribute__((aligned(32)))
+#endif
+#endif
 
 // I have no idea why these horrid macros exist but I suppose i will
 // find out - unaligned access probably. Which we don't care about,
