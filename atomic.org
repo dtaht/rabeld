@@ -1,3 +1,45 @@
+* TODO Switch to RTT metrics universally
+
+OK, I'm satisfied that we can use the RTT metrics more fully.
+Bridged wifi typically has a min rtt of 128 to 250 - 
+Adhoc, much lower
+usb lower still
+the jitter around 100Mbit and 1Gbit is bothersome on ethernet
+What is a good value for max-rtt-penalty? 2048 seems like it would cover the
+diameter of my network
+and I want to use min-rtt of 100us which I can't do - 1ms...
+
+|Tech |Min-RTT|Max-RTT|
+|+++++|+++++++|+++++++|
+|wired,usb,wireless,bridged wireless|
+
+rtt-min needs to go to us to detect a gbit. Sure hope jules did that.
+rtt-max
+max
+
+** TODO Look into kathie's min-max filters from BBR and elsewhere
+These are major answers to the smoothing problems.
+
+** TODO look into txcost and rxcost
+I never have really understood the real purpose of these fixed parameters.
+In particular with split horizon I get 96/256 all the time.
+I LIKE split horizon...
+
+* DONE further optimize NEON for CSE <2017-02-20 Mon> 
+The compiler did not realize that it did not need to reload the src_prefix and
+prefix on every pass through the loop. 
+
+** TODO Perhaps I can fix this - const? 
+
+** TODO eliminate bubble sort in xroute [P1] 
+
+... and it turned out the real cause of this routine eating all the runtime
+was that xroute uses a bubble sort! For a better test of route carrying capacity
+I can switch to injecting 500 routes from every rabeled box, rather than
+slamming in 10000 from one (which promptly gets in trouble due to this sort).
+
+
+
 * TODO respond to late hellos sanely
 
 Finally - after all this optimization work - I'm close to making a logic change
