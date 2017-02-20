@@ -46,7 +46,7 @@ babeld-whole.c: $(SRCS) version.h
 	cat $(SRCS) > babeld-whole.c
 
 babeld-whole.s: babeld-whole.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -msse4.2 -fwhole-program -fverbose-asm babeld-whole.c -S -o babeld-whole.s $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -fwhole-program -fverbose-asm babeld-whole.c -S -o babeld-whole.s $(LDLIBS)
 
 babeld-whole: babeld-whole.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -fwhole-program babeld-whole.c -o babeld-whole $(LDLIBS)
