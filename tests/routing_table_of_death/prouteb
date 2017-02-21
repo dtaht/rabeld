@@ -5,6 +5,11 @@ EXPIRES=300
 END=120
 IFACE=babel0
 PROTO=8 # reuse gated for this sort of testing
+PLEN=64 # FIXME: a good idea to start testing variable length prefixes too
+# Randomize the starting point
+R1=${RANDOM}
+R2=${RANDOM}
+R=`expr ${R1} \* ${R2}`
 
 #IPv6 Prefix generator intended to blow up routes everywhere
 #Crudely but consistently generate a random PREFIX
@@ -12,9 +17,13 @@ PROTO=8 # reuse gated for this sort of testing
 
 a=`echo $HOST | md5sum`
 
-PREFIX=fc${a:0:2}:${a:3:4}:${a:8:4}::
+# You'd think the ietf standards would let you just punch in a hex string
+# without colons. But noooo....
 
-echo $HOST has $PREFIX
+PREFIX=fc${a:0:2}:${a:3:4}:${a:7:4}:
+START=`printf %x:%x:%x ${R,0:4} ${R,4:4} ${R,8:4}`
+
+echo $HOST has $PREFIX starting at $START
 
 export PREFIX PROTO IFACE END EXPIRES
 
@@ -22,7 +31,7 @@ setup() {
 ip link add $IFACE type dummy
 ip link set $IFACE up
 # Add a covering route to add to the fun
-ip -6 route add ${PREFIX}/48 expires $EXPIRES proto $PROTO
+ip -6 route add ${PREFIX}:/48 expires $EXPIRES proto $PROTO
 }
 
 teardown() {
@@ -30,9 +39,13 @@ ip link del $IFACE
 }
 
 add() {
-for i in `seq 1 $END`
+local I=$R
+local E=`expr $R + $END`
+for i in `seq $R $E`
 do
-ip -6 route add ${PREFIX}`printf %x $i` dev $IFACE proto $PROTO expires $EXPIRES
+local W1=`printf %012x ${I}`
+E2=`printf ${W1,0:(-4)}:${W1,0:(-4)}` # ${W1,0:4}`
+ip -6 route add ${PREFIX}${E2}::/$PLEN dev $IFACE proto $PROTO expires $EXPIRES
 done
 }
 
@@ -45,9 +58,9 @@ ip -6 route flush dev $IFACE proto $PROTO
 main() {
 setup
 add
-sleep $EXPIRES
-del
-teardown
+#sleep $EXPIRES
+#del
+#teardown
 }
 
 main
