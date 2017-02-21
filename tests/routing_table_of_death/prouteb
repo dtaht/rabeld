@@ -7,22 +7,22 @@ IFACE=babel0
 PROTO=8 # reuse gated for this sort of testing
 
 #IPv6 Prefix generator intended to blow up routes everywhere
-#Crudely but consistently generate a random prefix
+#Crudely but consistently generate a random PREFIX
 #use the fc range to keep it clear
 
 a=`echo $HOST | md5sum`
 
-prefix=fc${a:0:2}:${a:3:4}:${a:8:4}::
+PREFIX=fc${a:0:2}:${a:3:4}:${a:8:4}::
 
-echo $HOST has $prefix
+echo $HOST has $PREFIX
 
-export prefix PROTO IFACE END EXPIRES
+export PREFIX PROTO IFACE END EXPIRES
 
 setup() {
 ip link add $IFACE type dummy
 ip link set $IFACE up
 # Add a covering route to add to the fun
-ip -6 route add ${prefix}/48 expires $EXPIRES proto $PROTO
+ip -6 route add ${PREFIX}/48 expires $EXPIRES proto $PROTO
 }
 
 teardown() {
@@ -32,7 +32,7 @@ ip link del $IFACE
 add() {
 for i in `seq 1 $END`
 do
-ip -6 route add ${prefix}`printf $P $i` dev $IFACE proto $PROTO expires $EXPIRES
+ip -6 route add ${PREFIX}`printf %x $i` dev $IFACE proto $PROTO expires $EXPIRES
 done
 }
 
