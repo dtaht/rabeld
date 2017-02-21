@@ -1,10 +1,8 @@
-* Juliusz read my commits and took my "bubble" comment badly.
+* Not a bubble...
 
-It's a "naive implementation of set difference", not a bubbly sort. I apologized
-profusely to him and his countries on behalf of american hackers with too little
-sleep.
+It's a "naive implementation of set difference", not a bubbly sort.
 
-But I was trying to fix what ended up being triggered by NetworkManager in the
+I was merely trying to fix what ended up being triggered by NetworkManager in the
 end, and learning the codebase besides.
 
 * And...
