@@ -1,3 +1,63 @@
+* Juliusz read my commits and took my "bubble" comment badly.
+
+It's a "naive implementation of set difference", not a bubbly sort. I apologized
+profusely to him and his countries on behalf of american hackers with too little
+sleep.
+
+But I was trying to fix what ended up being triggered by NetworkManager in the
+end, and learning the codebase besides.
+
+* And...
+
+Network Manager I hope - and not babeld just did this... AGAIN.
+
+root@chip-5:~/rabeld/tests/routing_table_of_death# ip route | grep static
+default via 172.26.201.1 dev wlan0  proto static  metric 1024 
+172.26.16.0/24 via 172.26.201.244 dev wlan0  proto static 
+172.26.64.0/24 via 172.26.201.244 dev wlan0  proto static 
+172.26.130.0/23 via 172.26.201.244 dev wlan0  proto static 
+
+* DONE Fix /sbin/dhclient-script on the chip!
+always sets the defualt route! Overridding dhclient.conf
+
+* apt-get install netcat6
+
+* udhcp-script also insists on setting the default route
+
+** new udhcp script
+never install the default route directly
+save it to a file
+/tmp/udhcpc/interface
+monitoring daemon looks for files in that dir
+
+* TODO Leverage compute time as part of the jitter
+
+There is (probably) no need to install jitter when we are computing too hard or
+having bandwidth issues. 
+
+* TODO Create stubby nodes and use filtering better
+
+* TODO Create the vpn
+
+* TODO Create a and import the refmetric universally
+
+Since switching to using protos so heavily I totally missed on adding the metric
+(when put in by daemon X), or adding one when added by babel.
+
+The default suggested value is 128. I can put it in when I insert the route. Or
+always override it when installing into babel.
+
+** TODO Deal with source specific better
+
+
+* TODO Fix babel-pinger and udhcp
+
+I just lost my comcast gateway for no good reason again. Much puzzlement ensued.
+
+* And I want the route to come from udhcp and get put in the right place
+and do naming
+and so on
+
 * TODO Switch to RTT metrics universally
 
 OK, I'm satisfied that we can use the RTT metrics more fully.
@@ -31,13 +91,13 @@ prefix on every pass through the loop.
 
 ** TODO Perhaps I can fix this - const? 
 
-** TODO eliminate bubble sort in xroute [P1] 
+** TODO eliminate bubbly search in xroute [P1] 
 
-... and it turned out the real cause of this routine eating all the runtime
-was that xroute uses a bubble sort! For a better test of route carrying capacity
-I can switch to injecting 500 routes from every rabeled box, rather than
-slamming in 10000 from one (which promptly gets in trouble due to this sort).
-
+... and it turned out the real cause of this routine eating all the runtime was
+that xroute uses a naive set comparison! For a better test of route carrying
+capacity I can switch to injecting 500 routes from every rabeled box, rather
+than slamming in 10000 from one (which promptly gets in trouble due to this
+lookup).
 
 
 * TODO respond to late hellos sanely
