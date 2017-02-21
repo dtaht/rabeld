@@ -336,12 +336,6 @@ prefix_cmp(const unsigned char *p1, unsigned char plen1,
 {
     int plen = MIN(plen1, plen2);
 
-    // FIXME: I don't understand why we have to do this comparison
-    // It gets handled later, essentially merely by comparing prefixes
-
-    if(v4mapped(p1) != v4mapped(p2))
-        return PST_DISJOINT;
-
     if(memcmp(p1, p2, plen / 8) != 0)
         return PST_DISJOINT;
 
