@@ -31,8 +31,11 @@ export PREFIX PROTO IFACE END EXPIRES
 setup() {
 ip link add $IFACE type dummy
 ip link set $IFACE up
-# Add a covering route to add to the fun
-ip -6 route add ${PREFIX}:/48 expires $EXPIRES proto $PROTO
+# Add a covering route to add to the fun and let it stick around longer
+EXP2=`expr $EXP2 + 60`
+EXP3=`expr $EXPIRES + 120`
+ip -6 route add ${PREFIX}:/48 dev $IFACE expires $EXP2 proto $PROTO
+ip -6 route add ${PREFIX}:/56 dev $IFACE expires $EXP3 proto $PROTO
 }
 
 teardown() {
