@@ -2,7 +2,7 @@ PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
 
 #CDEBUGFLAGS = -std=c11 -O3 -pg -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
-CDEBUGFLAGS = -std=gnu99 -Wall -O3 -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
+CDEBUGFLAGS = -std=gnu99 -Wall -g -Os -Wall -I/lib/modules/4.9.0-rc5-airtime-9/build/linux/include/uapi
 
 # FIXME for cross compilation
 ARCH=$(shell uname -m)
@@ -11,7 +11,7 @@ NEON=-DHAVE_NEON -mfpu=neon
 endif
 
 ifeq ($(ARCH),x86_64)
-X8664=-DHAVE_64BIT_ARCH
+X8664=-DHAVE_64BIT_ARCH -msse2
 endif
 
 DEFINES = $(PLATFORM_DEFINES) $(NEON) $(X8664)
