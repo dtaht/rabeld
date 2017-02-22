@@ -307,7 +307,7 @@ check_xroutes(int send_updates)
     debugf("\nChecking kernel routes.\n");
 
  again:
-    routes = calloc(maxroutes, sizeof(struct kernel_route));
+    routes = malloc(maxroutes * sizeof(struct kernel_route));
     if(routes == NULL)
         return -1;
 
