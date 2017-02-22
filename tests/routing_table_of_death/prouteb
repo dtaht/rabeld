@@ -2,7 +2,7 @@
 # Run test for 300 seconds
 HOST=`hostname`
 EXPIRES=100
-END=128
+END=16
 IFACE=babel0
 PROTO=8 # reuse gated for this sort of testing
 PLEN=64 # FIXME: a good idea to start testing variable length prefixes too
@@ -36,6 +36,8 @@ EXP2=`expr $EXP2 + 60`
 EXP3=`expr $EXPIRES + 120`
 ip -6 route add ${PREFIX}:/48 dev $IFACE expires $EXP2 proto $PROTO
 ip -6 route add ${PREFIX}:/56 dev $IFACE expires $EXP3 proto $PROTO
+# Let me see which box is acting up... 
+ip -6 addr add ${PREFIX}:1/48 dev $IFACE proto $PROTO noprefixroute
 }
 
 teardown() {
