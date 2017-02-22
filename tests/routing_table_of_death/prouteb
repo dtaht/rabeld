@@ -61,12 +61,16 @@ ip -6 route flush dev $IFACE proto $PROTO
 
 }
 
+killme() {
+sleep $EXPIRES
+del
+teardown
+}
+
 main() {
 setup
 add
-#sleep $EXPIRES
-#del
-#teardown
+killme &
 }
 
 main
