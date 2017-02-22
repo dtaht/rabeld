@@ -1026,6 +1026,8 @@ void print_failed_netlink(char *s, int operation, int table, int metric, int dev
 
 const int iflo = 0; // fixme find this
 
+#if 0
+#error don't build this'
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -1275,11 +1277,12 @@ kernel_route(int operation, int table,
 }
 
 // Work in progress
+#endif
 
-#if 0
+#if 1
 
 int
-kernel_route2(int operation, int table,
+kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
              const unsigned char *src, unsigned short src_plen,
              const unsigned char *gate, int ifindex, unsigned int metric,
@@ -1326,46 +1329,14 @@ kernel_route2(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
+	    // FIXME: you can maybe skip this check now and always replace
         if(newmetric == metric && v6_equal(newgate, gate) &&
            newifindex == ifindex)
             return 0;
-
-        /* Infinite kernel routes get remapped to the lo address,
-	   so we need to use that when moving routes.
-
-	   When we replace a route, use those ifaddrs instead.
-
-	*/
-
-	/* When coming from infinity, just flush the route.
-The thing that bothers me is I'm always seeing infinite routes
-starting off that way */
-
-        // FIXME if the interface went down there is no
-	// route to modify because the kernel did it for us
-	// A way to deal with this is always have two or more
-	// routes installed in the kernel
-
-	if(metric == KERNEL_INFINITY) {
-	        kernel_route(ROUTE_FLUSH, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0);
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-            if(errno == EEXIST)
-                rc = 1;
-            /* Should we try to re-install the flushed route on failure?
-               Error handling is hard. */
-        }
-        return rc;
-	}
-
-//	ifindex_lo = if_nametoindex("lo"); should end up being a global somewhere
-//	if(newmetric == KERNEL_INFINITY) newifindex = iflo;
+	table = newtable;
+	gate = newgate;
+	ifindex = newifindex;
+	metric = newmetric;
     }
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
@@ -1381,22 +1352,19 @@ starting off that way */
     /* Unreachable default routes cause all sort of weird interactions;
        ignore them. */
 
-    if((metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) &&
+    if((metric >= KERNEL_INFINITY) &&
 	    (plen == 0 || (ipv4 && plen == 96)))
         return 0;
 
     memset(buf.raw, 0, sizeof(buf.raw));
 
-    if(operation == ROUTE_ADD) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE | NLM_F_EXCL;
-        buf.nh.nlmsg_type = RTM_NEWROUTE;
-    } else if(operation == ROUTE_MODIFY) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE ;
-        buf.nh.nlmsg_type = RTM_NEWROUTE;
-    } else {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST ;
+    if(operation == ROUTE_FLUSH) {
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE;
         buf.nh.nlmsg_type = RTM_DELROUTE;
-	ifindex = 0;
+//	ifindex = 0;
+    } else {
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
+        buf.nh.nlmsg_type = RTM_NEWROUTE;
     }
 
     rtm = NLMSG_DATA(&buf.nh);
@@ -1405,14 +1373,14 @@ starting off that way */
     if(use_src)
         rtm->rtm_src_len = src_plen;
     rtm->rtm_table = table;
-    rtm->rtm_scope = RT_SCOPE_UNIVERSE;
-// not sure if I worked around this right
+    rtm->rtm_scope = RT_SCOPE_UNIVERSE; // FIXME: NOT SURE ABOUT THIS
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
         rtm->rtm_type = RTN_UNREACHABLE;
+
     rtm->rtm_protocol = RTPROT_BABEL;
-    rtm->rtm_flags |= RTNH_F_ONLINK;
+    rtm->rtm_flags |= RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
 
     rta = RTM_RTA(rtm);
 
@@ -1422,16 +1390,16 @@ starting off that way */
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
     } else {
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
         if(use_src) {
             rta = RTA_NEXT(rta, len);
             rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
             rta->rta_type = RTA_SRC;
             memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
         }
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
     }
 
     rta = RTA_NEXT(rta, len);
@@ -1460,25 +1428,6 @@ starting off that way */
         *(int*)RTA_DATA(rta) = -1;
     }
 
-    if(operation == ROUTE_MODIFY) {
-    if(ipv4) {
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
-    } else {
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
-        if(use_src) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_SRC;
-            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
-        }
-    }
-
 //    PERHAPS one day push babel routes as expiring into the
 //    the kernel and periodically refresh them. This would
 //    give us a window to crash or restart in without retractions
@@ -1495,57 +1444,35 @@ starting off that way */
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
 
-    if(newmetric < KERNEL_INFINITY) {
-        *(int*)RTA_DATA(rta) = newmetric;
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_OIF;
-        *(int*)RTA_DATA(rta) = newifindex;
+        *(int*)RTA_DATA(rta) = ifindex;
 
         if(ipv4) {
             rta = RTA_NEXT(rta, len);
             rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
             rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), newgate + 12, sizeof(struct in_addr));
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
         } else {
             rta = RTA_NEXT(rta, len);
             rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
             rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), newgate, sizeof(struct in6_addr));
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
         }
     } else {
         *(int*)RTA_DATA(rta) = -1;
     }
 
-
-    }
-
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
-    if(rtm->rtm_protocol != RTPROT_BABEL) 
+    if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
 
     rc = netlink_talk(&buf.nh);
-    if(rtm->rtm_protocol != RTPROT_BABEL) 
+    if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
-
-    if(rc != 0) {
-	    fprintf(stderr,"failed kernel_route: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : 
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-	    if(operation == ROUTE_MODIFY) {
-	    fprintf(stderr,"failed kernel_change: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : 
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            newtable, newmetric, newifindex, format_address(newgate));
-	    }
-    }
     return rc;
 }
 #endif
