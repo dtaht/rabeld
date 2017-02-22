@@ -1329,7 +1329,10 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-	    if(metric >= KERNEL_INFINITY) {
+	    // clear out the old route
+	    // Going from infinite to normal
+	    // going from normal to infinite
+	    if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
 	             rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
@@ -1362,7 +1365,7 @@ kernel_route(int operation, int table,
     memset(buf.raw, 0, sizeof(buf.raw));
 
     if(operation == ROUTE_FLUSH) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE;
+	    buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE; // NLM_EXCL?
         buf.nh.nlmsg_type = RTM_DELROUTE;
 //	ifindex = 0;
     } else {
