@@ -41,6 +41,11 @@ THE SOFTWARE.
 #include "util.h"
 #include "net.h"
 
+const int ds = 0x02;        /* ECN without  */
+const int ds_urgent = 0xc2;        /* ECN without  */
+const int ds_lossy = 0x00;
+const int ds_urgent_lossy = 0xc0;
+
 int
 babel_socket(int port)
 {
@@ -48,7 +53,6 @@ babel_socket(int port)
     int s, rc;
     int saved_errno;
     int one = 1, zero = 0;
-    const int ds = 0x02;        /* ECN without  */
 
     s = socket(PF_INET6, SOCK_DGRAM, 0);
     if(s < 0)
@@ -134,7 +138,7 @@ babel_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen)
     msg.msg_iovlen = 1;
 
     // Fixme - no error checking here!
-    
+
     rc = recvmsg(s, &msg, 0);
     return rc;
 }
