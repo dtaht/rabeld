@@ -59,6 +59,9 @@ extern unsigned char packet_header[4];
 extern struct neighbour *unicast_neighbour;
 extern struct timeval unicast_flush_timeout;
 
+extern const int ds;
+extern const int ds_urgent;
+
 void parse_packet(const unsigned char *from, struct interface *ifp,
                   const unsigned char *packet, int packetlen);
 void flushbuf(struct interface *ifp);

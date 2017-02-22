@@ -815,6 +815,7 @@ void
 flushbuf(struct interface *ifp)
 {
     int rc;
+    int u;
     struct sockaddr_in6 sin6;
 
     assert(ifp->buffered <= ifp->bufsize);
@@ -831,11 +832,13 @@ flushbuf(struct interface *ifp)
             sin6.sin6_port = htons(protocol_port);
             sin6.sin6_scope_id = ifp->ifindex;
             DO_HTONS(packet_header + 2, ifp->buffered);
-            fill_rtt_message(ifp);
+            u = fill_rtt_message(ifp);
+	    if(u==1) setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_TCLASS, &ds_urgent, sizeof(ds_urgent));
             rc = babel_send(protocol_socket,
                             packet_header, sizeof(packet_header),
                             ifp->sendbuf, ifp->buffered,
                             (struct sockaddr*)&sin6, sizeof(sin6));
+	    if(u==1) setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_TCLASS, &ds, sizeof(ds));
             if(rc < 0)
                 perror("send");
         } else {
@@ -1661,7 +1664,9 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     ll = linklocal(neigh->address);
 
     if((ifp->flags & IF_TIMESTAMPS) && neigh->hello_send_us &&
-       /* Checks whether the RTT data is not too old to be sent. */
+       /* Checks whether the RTT data is not too old to be sent. 
+          FIXME - Bufferbloat and ComputeBloat possible here
+       */
        timeval_minus_msec(&now, &neigh->hello_rtt_receive_time) < 1000000) {
         send_rtt_data = 1;
     } else {
