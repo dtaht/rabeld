@@ -1329,10 +1329,13 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-	    // FIXME: you can maybe skip this check now and always replace
-        if(newmetric == metric && v6_equal(newgate, gate) &&
-           newifindex == ifindex)
-            return 0;
+	    if(metric >= KERNEL_INFINITY) {
+	             rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
+                     src, src_plen,
+                     gate, ifindex, metric,
+                     NULL, 0, 0, 0);
+                     if(rc!=0) fprintf(stderr,"Flushing infinite route failed\n");
+	    }
 	table = newtable;
 	gate = newgate;
 	ifindex = newifindex;
