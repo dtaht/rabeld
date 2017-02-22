@@ -1,3 +1,86 @@
+* a route flush proto 8
+does the right thing
+
+But does an expires?
+
+And I left the pi3 out of it this time.
+
+* TODO fixusb on the apu2
+
+is the way to get those usb devices back up
+need to fire that when the darn things come
+back up automagically
+
+Let's try the next test without the pi3
+* TODO
+Get external name service finally back up
+ip monitor | my script
+* Crashed the pi3
+I guess I was due.
+
+And the routes persist....
+I shut down the chips I could still get to...
+Which did expire their routes...
+
+I see fd99::10/128 a bunch of times. which is the 
+unreachable pi3.... - over ipv6. over ipv4 it is fine
+
+Now that box has a very custom babeld.conf file...
+and an old setup.
+
+Anyway, I shut it down, and I don't know if 
+it was co-incidence/timing or not, but the extra
+routes went away.
+
+all on the same 
+
+routerid db would be HELPFUL
+
+* killall is missing on the chips
+
+* Anyway, in the bufferbloated world
+all the routes stay there. for a very long time.
+They don't expire. Don't think it's the new filter.
+Could be a thinko on my part...
+
+1500 routes with no known source... except bufferbloat
+
+They no longer exist in the kernel tables as proto 8.
+Could they be so backed up that even restarting babeld
+won't fix it?
+Do I have a metric wrong? Is there an expires 
+different than a non-expires when signalling the kernel?
+
+* The biggest most expensive thing in consider-route
+is the comparison moving things from neon to normal regs
+and it's not that much of cpu - 6% as I write
+but 50% of the trace
+and the comparison in min_conflicts but not the neon
+part.
+
+Still... fixing the memcmp routine to be neon would be good
+
+* fix more boxes 
+** Fix the c2
+** Fix the pi2
+** Rebuild chip-5
+** Fix the c1 
+** reflash a few more lede boxes
+** Rebuild the parallel kernels
+** Get the other wifi interfaces on the pi3 up
+** Get logging better
+** make babelweb be smaller on screen
+** Automate multicast parsing .cap files
+** Short circuit compute bound problems
+** Determine paths of tests
+** Dynamically increase hello interval or
+** Break dependence on route updates to the hello interval
+** Find any other sources of martian_prefixes
+** Profile code again under this load
+** Have babelweb turn addresses into names
+** Fix dns while I'm at it
+** Add parsing for usec for rtt metrics
+** Make sure expires is working for all boxes
 * TODO Try to pass the concept of "urgent" down the stack
 
 Although the mac80211 layer presently respects CS6 markings to give things
