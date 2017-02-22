@@ -82,6 +82,9 @@ const unsigned char zeroes[16] = {0};
 const unsigned char ones[16] =
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+#ifdef HAVE_NEON
+uint32x4_t n_ones,n_v4prefix,n_llprefix;
+#endif
 
 int protocol_port;
 unsigned char protocol_group[16];
@@ -168,6 +171,11 @@ main(int argc, char **argv)
     unsigned int seed;
     struct interface *ifp;
 
+#ifdef HAVE_NEON
+    n_ones = vld1_u32(const unsigned int *) ones;
+    n_v4prefix  = vld1_u32(const unsigned int *) v4prefix;
+    n_llprefix = vld1_u32(const unsigned int *) llprefix;
+#endif
     gettime(&now);
 
     rc = read_random_bytes(&seed, sizeof(seed));
