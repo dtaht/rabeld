@@ -1,3 +1,201 @@
+* So I can finally make atomic updates work
+Armed with all this info.
+Let's try.
+
+And it seems to work.
+
+I think we get into this fight with network manager because we were using exclu
+if we don't use exclu we override the other routes installed on the system that
+we are now managing and we take back control of things like the default route.
+
+Which is usually what you want. Unless you want to have route X metric Y from
+somewhere else. Have to think about it. I can see another daemon doing a route
+replace and expecting it to be their route again - much like the losing battle
+with network manager....
+
+* asdf
+
+root@dancer:~/git/rabeld# 
+root@dancer:~/git/rabeld# babeld eno1
+Not sure why this is back - needs to get flushed?
+Can't install socket filter: Invalid argument
+Type: 0
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+kernel_route(ADD): File exists
+failed kernel_route: flush 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+flush failed during replace: No such process
+failed kernel_route modify during replace: 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.5
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
+Table 254 vs other stuff?
+
+
+* On going unreachable
+the proto stays the same. The dev reports to
+become lo. but if I just specify theproto
+it works
+ 
+
+root@dancer:~/cs6# ip -6 route replace unreachable fd53::/64 proto 99 root@dancer:~/cs6# ip -6 route replace fd53::/64 dev eno1 proto 99 
+root@dancer:~/cs6# ip -6 route replace unreachable fd53::/64 proto 99 
+root@dancer:~/cs6# ip -6 route replace fd53::/64 dev eno1 proto 99 
+
+* wtf
+Deleted local fd32:7d58:8d63:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fe80:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+Could still be the parallela acting up.
+/me walks away
+
+Nope.
+
+** TODO Need to add 1 real address to the machines
+acting up, so I can find out which one it is.
+
+** You can't add unreachable routes that expire
+
+root@dancer:~/git/rabeld/tests/routing_table_of_death# ip -6 route | grep fd88
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+root@dancer:~/git/rabeld/tests/routing_table_of_death# ip -6 route | grep fd88
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+
+The expire doesn't make it into it.
+
+When you create a new interface,
+in this case dummy
+
+ff00::/8 dev babel0 table local metric 256  pref medium
+fe80::/64 dev babel0 proto kernel metric 256  pref medium
+local fe80::7872:e9ff:fe80:df17 dev lo table local proto unspec metric 0  pref medium
+local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+The derived interface for it gets entered above
+in the local table.... for ff
+kerel table for fe80
+local table for the fe80:xxxx
+fe80:: for the table local
+
+fe80::7872:e9ff:fe80:df17/64
+
+local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+** ip -6 addr add fd87::1/64 dev babel0 preferred_lft 30 valid_lft 30
+
+fd87::/64 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+local fd87:: dev lo table local proto unspec metric 0  pref medium
+
+and when it expires we get:
+
+Deleted local fd87:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::/64 dev babel0 proto kernel metric 256  expires -6sec pref medium
+
+** ip -6 addr add fd87::1/64 dev babel0 preferred_lft 30 valid_lft 30 noprefixroute
+
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+local fd87:: dev lo table local proto unspec metric 0  pref medium
+
+Deleted local fd87:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+
+**  ip -6 addr add fd87::1/128 dev babel0 preferred_lft 30 valid_lft 30 noprefixroute
+
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+
+** ip -6 addr add fd87::1/128 dev babel0 preferred_lft 30 valid_lft 30
+
+Takes a while for the last message to show up
+
+fd87::1 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::1 dev babel0 proto kernel metric 256  expires -7sec pref medium
+
+** Expiring unreachable routes don't expire
+either an iproute2 bug or kernel bug
+** And lookie here: a NULL in the output!
+Is it from netlink? iproute?
+ip -6 route add fd87::/64 dev babel0 expires 30
+
+^@fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -10sec pref medium
+
+I did it again and it did not have that null
+
+could it have been me typin that? 
+
+Can't reproduce... is this the mysterious
+thing the openvswitch folk were dealing with?
+
+fd87::1 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::1 dev babel0 proto kernel metric 256  expires -7sec pref medium
+^@fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -10sec pref medium
+fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd86::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd85::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd84::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd86::/64 dev babel0 metric 1024  expires -1sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -29sec pref medium
+** ip -6 route replace fd85::/64 dev babel0 expires 30
+
+** ip -6 route replace fd85::1/128 dev babel0 expires 30
+no table mentioned in the message
+fd85::1 dev babel0 metric 1024  expires 30sec pref medium
+
+I specify a table or a proto and that shows up.
+
+But I do not see a table unless I give it one
+to start with nor a proto unless I give it one to start with
+
+IF I give it a table 0, it doesn't show up either
+so we assume it's table 0
+
+table local shows up as table local
+
+table unspec does not appear in ip monitor
+
+both table 254 and 0 report no table
+
+(I could have messed this up in babel, too, but)
+
+table default is 253 - which, ugh I made babel be
+table 0 and table 254 report the same tthing
+
+proto 255 reports nothing
+
+254: gated/aggr
+3: reports no proto either 
+4: reports static
+
+42: If I insert an expiring route into 
+babel's table, will it see it?
+
+* Reminder to self
+
+Don't just stop babeld and leave it stopped.
+You can't get back in to anything
+
+Anyway, killing them all expired all the routes
+being rebroadcast from box to box.
+
+Gotta fix dns so I can get back in more easily.
+
+* NO! routes that expire are not seen.
+
+This may explain a LOT. As the kernel dbs are now out of sunc
+
+I really hate watching the delete add go by in
+ip -6 monitor route. Really hate it. Gotta go fix that
+finally...
+
 * a route flush proto 8
 does the right thing
 
