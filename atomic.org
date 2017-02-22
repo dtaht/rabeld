@@ -1,3 +1,105 @@
+* TODO Try to pass the concept of "urgent" down the stack
+
+Although the mac80211 layer presently respects CS6 markings to give things
+priority, most of the drivers I've looked at just keep all that in their own
+queue, and at least some, ignore priority. That said, it would be nice when
+babel thinks a flush is urgent, for it to somehow tell the rest of its own stack
+and ultimately the wire, that it is, indeed, urgent. But urgent is a concept
+almost entirely internal to babel itself, and lost long before we get to
+babel_send.
+
+
+We could try to arbitrarily look for hellos and ihus, and write the packet
+header ourselves instead of setsockopt, or carry the notion of "urgent" further...
+
+ifp->buffered_IHU? - so I just leveraged the existing timestamping code
+to set the sockopt when needed. 
+
+And worse, for unicast, CS6 maps to the voice queue, which is a terrible idea,
+which is why I killed it, and want to kill it upstream as well.
+
+I should look into what the chip's do with it.
+
+And upstream mac80211 just added a qos_map facility....
+
+* TODO review this....
+
+Maybe I re-introduced a bug (tho I don't see it)
+
+commit e687a58f01f2f1bcc344d8f9bacdfa5954dcae69
+Author: Matthieu Boutier <boutier@pps.univ-paris-diderot.fr>
+Date:   Fri Apr 15 13:47:45 2016 +0200
+
+    Fix bug allowing the comparison of v4 and v6 prefixes.
+    
+    When the v6 prefix is ::/0, then it is considered as less specific than
+    any v4-mapped prefix.
+    
+    Remark that "no source prefix" is encoded by "src_plen == 0".  This
+    might be an issue, since "src_plen == 0" means ::/0, a v6 prefix.  So
+    the route (1.1.1.1/32 from 0.0.0.0/0) is internally represented by
+    (1.1.1.1/32 from ::/0).  When compared with  (::/0 from 2001:db8::/32),
+    the two source prefixes are comparable.  This is not a problem in
+    practice, since 2 pairs of prefixes are disjoint whether the dst
+    prefixes or the src prefixes are disjoint.
+
+
+* TODO IN6_IS macros
+
+There are some pretty efficient-looking macros for more IN6_stuff in the glib
+headers.
+
+I do think killing v4_mapped was the right thing, but looking at the macros for
+this in glib I am not so sure.
+
+* Killed another memcmp in prefix_cmp. Then un-killed it.
+
+Endianess bites. We need to actually apply the mask first to both before doing
+the compare... or... agh... reverted. Now I'm worrying about endianess
+elsewhere. I need to keep writing benchmarks to keep my head clear on this.
+
+
+** __builtin_bswap in gcc for registers
+
+http://stackoverflow.com/questions/33932038/fast-conversion-of-16-bit-big-endian-to-little-endian-in-arm
+
+** Reorder on load
+And we can actually do the reordering on the load itself in this case -
+this example is for 16 bits, but... agh
+
+void neon_Reorder16bit(const uint8_t * src, size_t size, uint8_t * dst)
+{
+  assert(size%16 == 0);
+  //uint16x8_t vld1q_u16 (const uint16_t *) 
+  //vrev64q_u16(uint16x8_t vec);
+  //void vst1q_u16 (uint16_t *, uint16x8_t) 
+  for (size_t i = 0; i < size; i += 16)
+    vst1q_u8(dst + i, vrev16q_u8(vld1q_u8(src + i)));
+}
+
+* lightbulb!
+
+I have a minimum of *16* 128 bit neon registers.
+
+With whole program optimization, I *think* - we never have to spill them.
+except for c library calls, maybe.
+We currently use a max of 4 + temp (sometimes)
+so we can store the v4_prefix along with a mask
+the fe80 prefix with a mask
+127.0.0.1/32 as v4mapped also with mask
+
+we call martian_prefix a LOT. Where do they come from? What is a martian?
+How can we squash them? Adding some logging to the mix all I see are:
+
+Martian Prefix fe80::/64
+Martian Prefix fe80::/64
+Martian Prefix 127.0.0.1/32
+Martian Prefix ::1/128
+
+But there used to be "a bug?" where we regected stuff to ::
+
+Hmm. I wonder if we can punt this sort of comparison to BPF.
+
 * Not a bubble...
 
 It's a "naive implementation of set difference", not a bubbly sort.
