@@ -45,6 +45,13 @@ const unsigned char v4prefix[16] =
 const unsigned char llprefix[16] =
     {0xFE, 0x80};
 
+// FIXME: is this correct? There's an IN_* macro for this
+// also we need to mask out all variants of localhost, I think.
+
+const unsigned char v4local[16] =
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 127, 0, 0, 1 };
+
+// FIXME: I worry about someone trying to inject multicast into the protocol
 
 int
 roughly(int value)
@@ -203,6 +210,8 @@ in_prefix(const unsigned char *restrict address,
 {
     unsigned char m;
 
+    // FIXME: Why can plen ever be > 128?
+    
     if(plen > 128)
         plen = 128;
 
@@ -221,10 +230,13 @@ unsigned char *
 normalize_prefix(unsigned char *restrict ret,
                  const unsigned char *restrict prefix, unsigned char plen)
 {
+
     if(plen >= 128) {
         memcpy(ret, prefix, 16);
         return ret;
     }
+
+    // Somehow I am unsure we can zero a reg this way
 
     memset(ret, 0, 16);
     memcpy(ret, prefix, plen / 8);
@@ -418,19 +430,23 @@ wait_for_fd(int direction, int fd, int msecs)
     return rc;
 }
 
+// FIXME: I really hate the martians
+
 int
 martian_prefix(const unsigned char *prefix, int plen)
 {
-    return
-        (plen >= 8 && prefix[0] == 0xFF) ||
+        if((plen >= 8 && prefix[0] == 0xFF) ||
         (plen >= 10 && prefix[0] == 0xFE && (prefix[1] & 0xC0) == 0x80) ||
         (plen >= 128 && memcmp(prefix, zeroes, 15) == 0 &&
          (prefix[15] == 0 || prefix[15] == 1)) ||
         (plen >= 96 && v4mapped(prefix) &&
          ((plen >= 104 && (prefix[12] == 127 || prefix[12] == 0)) ||
-          (plen >= 100 && (prefix[12] & 0xE0) == 0xE0)));
+          (plen >= 100 && (prefix[12] & 0xE0) == 0xE0)))) {
+	fprintf(stderr,"Martian Prefix %s\n", format_prefix(prefix,plen));
+	return 1;
+	}
+	return 0;
 }
-
 
 int
 daemonise()
