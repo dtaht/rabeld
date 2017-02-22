@@ -171,11 +171,11 @@ main(int argc, char **argv)
     unsigned int seed;
     struct interface *ifp;
 
-#ifdef HAVE_NEON
-    n_ones = vld1_u32(const unsigned int *) ones;
-    n_v4prefix  = vld1_u32(const unsigned int *) v4prefix;
-    n_llprefix = vld1_u32(const unsigned int *) llprefix;
-#endif
+//#ifdef HAVE_NEON
+//    n_ones = vld1_u32(const unsigned int *) ones;
+//    n_v4prefix  = vld1_u32(const unsigned int *) v4prefix;
+//    n_llprefix = vld1_u32(const unsigned int *) llprefix;
+//#endif
     gettime(&now);
 
     rc = read_random_bytes(&seed, sizeof(seed));
