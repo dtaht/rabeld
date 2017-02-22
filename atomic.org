@@ -1,3 +1,106 @@
+* So a righter behavior is to first flush the infinite route
+And that seems to work.
+
+I will never understand why on first startup babel tends to choose the worst
+route first.
+
+* Nope
+
+
+root@dancer:~/git/rabeld# ip route
+default via 172.26.201.1 dev wlp2s0 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel metric 4294967295 onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.61 proto babel metric 4294967295 onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.64 proto babel metric 4294967295 onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.65 proto babel metric 4294967295 onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel metric 4294967295 onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel metric 4294967295 onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel metric 4294967295 onlink 
+
+
+unreachable fcf2:530f:f4c8:f::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8:10::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8::/56 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::61 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::65 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 4294967295  error -113 pref medium
+
+** This first route that goes unreach is this one 
+which is a route assigned by dhcp I think
+
+default via 172.26.201.157 dev wlp2s0 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.200.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+
+** So if I reboot everything
+
+d@dancer:~/git/rabeld$ ip route
+default via 172.26.16.5 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.61 proto babel metric 4294967295 onlink 
+172.26.96.64 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.96.64 proto babel metric 4294967295 onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+** So this does nothing when I am stuck in this state
+
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+root@dancer:~/git/rabeld# ip route replace 172.26.96.66/32 via 172.26.201.194 dev wlp2s0 proto babel
+
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel metric 1024 onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+root@dancer:~/git/rabeld# ip route replace 172.26.96.66/32 via 172.26.201.194 dev wlp2s0 proto babel metric 1024 onlink
+
+
 * So I can finally make atomic updates work
 Armed with all this info.
 Let's try.
