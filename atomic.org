@@ -1,3 +1,183 @@
+* Anyway, I really, really, really don't want to poke into the chip's wifi
+
+Totally burnt on kernel development. However poking into wpa_supplicant seems
+now on the agenda. Maybe with better error handling it can stop being the
+problem.
+
+* SIOCGSTAMP
+Return a struct timeval with the receive timestamp of the last packet passed to
+the user. This is useful for accurate round trip time measurements. See
+setitimer(2) for a description of struct timeval. This ioctl should only be used
+if the socket option SO_TIMESTAMP is not set on the socket. Otherwise, it
+returns the timestamp of the last packet that was received while SO_TIMESTAMP
+was not set, or it fails if no such packet has been received, (i.e., ioctl(2)
+returns -1 with errno set to ENOENT).
+
+* Signals - any other signals we are not trapping?
+
+When writing onto a connection-oriented socket that has been shut down (by the
+local or the remote end) SIGPIPE is sent to the writing process and EPIPE is
+returned. The signal is not sent when the write call specified the MSG_NOSIGNAL
+flag. When requested with the FIOSETOWN fcntl(2) or SIOCSPGRP ioctl(2), SIGIO is
+sent when an I/O event occurs. It is possible to use poll(2) or select(2) in the
+signal handler to find out which socket the event occurred on. An alternative
+(in Linux 2.2) is to set a real-time signal using the F_SETSIG fcntl(2); the
+handler of the real time signal will be called with the file descriptor in the
+si_fd field of its siginfo_t. See fcntl(2) for more information.
+
+Under some circumstances (e.g., multiple processes accessing a single socket),
+the condition that caused the SIGIO may have already disappeared when the
+process reacts to the signal. If this happens, the process should wait again
+because Linux will resend the signal later.
+
+* SO_SNDTIMEEO
+I had no idea this socket existed
+https://linux.die.net/man/7/socket
+
+SO_SNDTIMEO
+
+Specify the receiving or sending timeouts until reporting an error. The argument
+is a struct timeval. If an input or output function blocks for this period of
+time, and data has been sent or received, the return value of that function will
+be the amount of data transferred; if no data has been transferred and the
+timeout has been reached then -1 is returned with errno set to EAGAIN or
+EWOULDBLOCK, or EINPROGRESS (for connect(2)) just as if the socket was specified
+to be nonblocking. If the timeout is set to zero (the default) then the
+operation will never timeout. Timeouts only have effect for system calls that
+perform socket I/O (e.g., read(2), recvmsg(2), send(2), sendmsg(2)); timeouts
+have no effect for select(2), poll(2), epoll_wait(2), and so on.
+
+While I'm looking these over - we'd added these to tcp, maybe they also work
+with udp for send now?
+
+SO_RCVLOWAT and SO_SNDLOWAT
+Specify the minimum number of bytes in the buffer until the socket layer will
+pass the data to the protocol (SO_SNDLOWAT) or the user on receiving
+(SO_RCVLOWAT). These two values are initialized to 1. SO_SNDLOWAT is not
+changeable on Linux (setsockopt(2) fails with the error ENOPROTOOPT).
+SO_RCVLOWAT is changeable only since Linux 2.4. The select(2) and poll(2) system
+calls currently do not respect the SO_RCVLOWAT setting on Linux, and mark a
+socket readable when even a single byte of data is available. A subsequent read
+from the socket will block until SO_RCVLOWAT bytes are available.
+
+* Babel's log is this every few seconds
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+even bringing the usb device "up" doesn't help
+no packets are getting out any interface, from any daemon
+restarting babel clears it - for the usb device. 
+The wifi driver remains wedged. 
+
+root@chip-1:/home/log# ps aux | grep wlan0
+root       360  0.0  0.3   5352  1964 ?        Ss   Feb22   0:00 /sbin/wpa_supplicant -s -B -P /run/wpa_supplicant.wlan0.pid -i wlan0 -D nl80211,wext -c /etc/wpa_supplicant.conf -C /run/wpa_supplicant
+root       409  0.0  1.1   7776  5728 ?        Ss   Feb22   0:00 /sbin/dhclient.orig -cf /etc/dhcp/dhclient.conf -v -pf /run/dhclient.wlan0.pid -lf /var/lib/dhcp/dhclient.wlan0.leases wlan0
+root     29329  0.0  0.0   1712    84 ?        Ss   15:59   0:00 /usr/sbin/babeld -D -I /var/run/babeld.pid -L /home/log/babel.log -G 33123 -l -S /var/lib/babeld/state wlan0 usb0
+root     29370  0.0  0.1   2080   504 ttyGS0   S+   16:02   0:00 grep wlan0
+
+root@chip-1:/home/log# ifconfig wlan0
+wlan0     Link encap:Ethernet  HWaddr 38:a2:8c:5d:f9:e5  
+          inet6 addr: fe80::3aa2:8cff:fe5d:f9e5/64 Scope:Link
+          inet6 addr: fd32:7d58:8d63:0:3aa2:8cff:fe5d:f9e5/64 Scope:Global
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1762708 errors:0 dropped:137426 overruns:0 frame:0
+          TX packets:1110315 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:2617842694 (2.4 GiB)  TX bytes:170330346 (162.4 MiB)
+
+ok
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add neighbour 3c118 address fe80::80d0:6dff:fe69:bd3b if usb0 reach ffff rxcost 96 txcost 96 rtt 0.764 rttcost 0 cost 96
+add xroute fd99::61/128-::/0 prefix fd99::61/128 from ::/0 metric 128 expires 0
+
+** Maybe when an interface is wedged we can call IPV6_LEAVE_GROUP
+Maybe all the other daemons are also experiencing the same error and retrying
+madly.
+** Leftover routes
+So, wifi is not getting any data. Why are this routes still going to wifi?
+
+root@chip-1:/home/log# ip -6 route
+local ::1 dev lo proto kernel metric 256  pref medium
+2601:646:4101:a740::/60 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fc02:b738:e988:1::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:2::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:3::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:4::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:5::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:6::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:7::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:8::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:9::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:a::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:b::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:c::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:d::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:e::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:f::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:10::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988::/56 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988::/48 via fe80::7ec7:9ff:fede:2bb5 dev wlan0 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/64 dev wlan0 proto kernel metric 256  pref medium
+fd32:7d58:8d63::/48 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd55::/64 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd69:3860:b137::/48 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::3 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::4 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::10 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+unreachable fd99::61 dev lo proto 44 metric 128  error -101 pref medium
+fd99::65 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::66 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fe80::/64 dev usb0 proto kernel metric 256  pref medium
+fe80::/64 dev wlan0 proto kernel metric 256  pref medium
+*** Although I like my random method
+I should really try to register these in dns somewhere so I 
+know where they come from.
+** I kill off dhclient - no effect
+** I kill off wpa_supplicant - ifconfig wlan0 hangs
+and babel hangs too - can't even get to it via the telnet interface
+The box drops off the net... can't even get back in via screen
+*** I guess I really need to fix the poweroff button or a hang check
+
+* Weird
+
+Feb 23 06:41:45 chip-1 ntpd[621]: Listen normally on 18 babel0 fe80::f837:2bff:fe36:13de UDP 123
+Feb 23 06:41:45 chip-1 ntpd[621]: Deleting interface #17 babel0, fe80::c43d:feff:fefe:63e3#123, interface stats: received=0, sent=0, dropped=0, active_time=600 secs
+Feb 23 06:41:45 chip-1 ntpd[621]: peers refreshed
+Feb 23 06:41:59 chip-1 dhclient: DHCPREQUEST on wlan0 to 172.26.201.1 port 67
+Feb 23 06:41:59 chip-1 dhclient: DHCPACK from 172.26.201.1
+Feb 23 06:42:00 chip-1 dhclient: bound to 172.26.201.127 -- renewal in 5498 seconds.
+
+* I ran it overnight with flent stress tests
+and with inserting and deleting routes.
+
+2 chips stopped getting mcast entirely (eventually) - and dropped off the net
+
+Ironically that was the one furthest away, but why did the other (chip-6)
+survive and not the others? Both are on wifi...
+
+4GB of packet captures. 16GB stick. 8TB raid array is at the yurtlab.
+
+Also, now that I'm sensitive to unsigned char - see the -?
+root@chip-1:~# nc ::1 33123
+BABEL 1.0
+version babeld-1.7.1-220-g217fb62-dirty
+host chip-1
+my-id 3a:a2:8c:ff:fe:5d:f9:e5
+ok
+dump
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add xroute 172.26.96.61/32-::/0 prefix 172.26.96.61/32 from ::/0 metric 128 expires 0
+add xroute fd99::61/128-::/0 prefix fd99::61/128 from ::/0 metric 128 expires 0
+ok
+
+
+** TODO ip monitor | routing_table_evolution
+babelweb does this graphically
+
 * Reverted the malloc patch
 
 Restarted it on the pi3. Life is better now. Abusing it still.
