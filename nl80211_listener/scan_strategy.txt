@@ -1,0 +1,15 @@
+The nl80211 listener plugin uses multiple nl80211 commands to query for data on wifi interfaces.
+
+1.) use NL80211_CMD_GET_INTERFACE (see iw <wifi> info) to get basic data about the interface
+
+2.) use NL80211_CMD_GET_WIPHY (see iw <phy> info) to get the capabilities of the hardware
+
+3.) use NL80211_CMD_GET_SURVEY (see iw <wifi> survey dump) to get channel utilization
+
+4.) if interface is a mesh interface, use NL80211_CMD_GET_MPP (see iw <wifi> mpp dump) to get the mesh proxy path table
+
+5.) use NL80211_CMD_GET_STATION (see iw <wlan0> station dump) to get the data of the neighbors
+
+1 and 2 are run every 10th scan
+
+3-5 are run every scan
