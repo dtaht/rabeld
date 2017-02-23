@@ -1,5 +1,264 @@
+* I have seen the pi3 do weird things when having power issues
+But I have a good power supply in it now... but there are
+two (unused) wifi usb sticks in it....
+
+The pi3 WAS my new best friend.
+
+Could still be my code. Or perhaps I've found the netlink bug I'm still looking for
+
+I swear! I swear! I saw netlink prepend a null to an address for no good reason.
+Once.
+
+* Awesome - can't parse packet
+** Logs from elsewhere
+Martian Prefix 127.0.0.1/32
+Martian Prefix ::1/128
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:effb
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:f9e5
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:effb
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+*** syslog
+
+Feb 23 01:01:29 pi3 systemd[1]: Starting Session c54 of user root.
+Feb 23 01:01:29 pi3 systemd[1]: Started Session c54 of user root.
+Feb 23 01:02:10 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:04:50 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:04:50 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:06:20 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:05:35 pi3 systemd[1]: Starting Session c55 of user root.
+Feb 23 01:05:35 pi3 systemd[1]: Started Session c55 of user root.
+Feb 23 01:06:56 pi3 dhcpcd[728]: babel0: dhcp if_readrawpacket: Network is down
+Feb 23 01:06:56 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:08:26 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:06:56 pi3 dhcpcd[728]: babel0: removing interface
+Feb 23 01:10:28 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:10:28 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:11:58 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:11:10 pi3 ntpd[836]: Deleting interface #23 babel0, fe80::ac2a:53ff:fe6b:ebd5#123, interface stats: received=0, sent=0, dropped=0, active_time=600 secs
+Feb 23 01:11:10 pi3 ntpd[836]: peers refreshed
+Feb 23 01:11:28 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+
+
+
+* fd99::10 is in there 10 times
+
+I fear this is a new bug, introduced by one of my changes. The pi3 is the only
+one doing this.... which btw wasn't running the latest code until recently.
+
+It doesn't even have the latest iproute2 on it - and the expires test wasn't
+running on it either. When importing it I have a refemtric of 0.
+
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+add xroute fd99::10/128-::8000:9ff7:120d:7fff/26 prefix fd99::10/128 from ::8000:9ff7:120d:7fff/26 metric 0 expires 0
+add xroute fd99::10/128-70d3:3700:78f0:3700::2100:0/211 prefix fd99::10/128 from 70d3:3700:78f0:3700::2100:0/211 metric 0 expires 0
+add xroute fd99::10/128-3aa2:8cff:fe5d:d369:fc2d:8773:610d:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:d369:fc2d:8773:610d:0/0 metric 0 expires 0
+add xroute fd99::10/128-4822:3e00:7422:3e00:a022:3e00:cc22:3e00/35 prefix fd99::10/128 from 4822:3e00:7422:3e00:a022:3e00:cc22:3e00/35 metric 0 expires 0
+add xroute fd99::10/128-900a:3e00:bc0a:3e00:e80a:3e00:140b:3e00/11 prefix fd99::10/128 from 900a:3e00:bc0a:3e00:e80a:3e00:140b:3e00/11 metric 0 expires 0
+add xroute fd99::10/128-e80a:3e00:140b:3e00:400b:3e00:6c0b:3e00/12 prefix fd99::10/128 from e80a:3e00:140b:3e00:400b:3e00:6c0b:3e00/12 metric 0 expires 0
+add xroute fd99::10/128-::211c:0:7029:3e00:4c5:e976/0 prefix fd99::10/128 from ::211c:0:7029:3e00:4c5:e976/0 metric 0 expires 16000
+add xroute fd99::10/128-d4a7:f00:0:100:b0b1:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:b0b1:3a00::/0 metric 0 expires 0
+
+@dancer:~/abuse$ ip -6 route | grep fd99::10
+
+fd99::10 from 4822:3e00:6000::/35 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from 9000::/11 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from e800::/12 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+
+
+** TODO revert that box to babeld
+** DONE ip -6 addr add fd99::10
+
+Added it back in... running the current babeld
+
+# For more information about this configuration file, refer to
+# babeld(8)
+default enable-timestamps true
+default max-rtt-penalty 2048
+ipv6-subtrees true
+# eth1 is attached to a bridged wifi/wired network
+interface eth0 wired true link-quality false
+interface eth1 wired true link-quality true
+# All these adhoc interfaces suck compared to others on the network
+# and right now, all on 6
+diversity 3
+interface wlan1 channel 6 wired false
+interface wlan0 channel 6 wired false
+interface wlan2 channel 6 wired false
+out if wlan1 metric 1024
+out if wlan0 metric 1024
+out if wlan2 metric 1024
+#I wanted to get hncp mesh addresses only (so as to be able to do ss
+#routing
+redistribute ip fd99::10/128 eq 128 allow
+redistribute proto 44 allow
+redistribute proto 43 allow
+redistribute proto 8 allow
+redistribute local deny
+# but ended up going with this for now
+~                                        
+* and I love watching stats lie
+in abuse:
+
+Started Flent 1.0.1-git-af2d06e using Python 3.5.2.
+Starting tcp_upload test. Expected run time: 310 seconds.
+Data file written to ./tcp_upload-2017-02-22T160821.747032.route_flaps_away.flent.gz.
+Summary of tcp_upload test run 'route_flaps_away' (at 2017-02-23 00:08:21.747032):
+
+                                    avg       median          # data pts
+ Ping (ms) ICMP          :        18.38        16.72 ms             1551
+ TCP upload              :        12.92         9.61 Mbits/s        1500
+ TCP upload::tcp_cwnd    :       126.16       123.00                1502
+ TCP upload::tcp_rtt     :        17.40        16.71                1503
+ TCP upload::tcp_rtt_var :         3.57         3.18                1503
+d@dancer:~/abuse$ flent -H 172.26.96.64 -t route_flaps_away --socket-stats -l 300 tcp_download
+Started Flent 1.0.1-git-af2d06e using Python 3.5.2.
+Starting tcp_download test. Expected run time: 310 seconds.
+Data file written to ./tcp_download-2017-02-22T161433.108957.route_flaps_away.flent.gz.
+Summary of tcp_download test run 'route_flaps_away' (at 2017-02-23 00:14:33.108957):
+
+                           avg       median          # data pts
+ Ping (ms) ICMP :       127.15       110.07 ms             1550
+ TCP download   :        15.99        16.58 Mbits/s        1500
+
+
+* Are the martians coming from the wire?
+
+From the kernel?
+
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+
+
+chip-1: Martian Prefix ::1/128
+chip-1: Martian Prefix fe80::/64
+chip-1: Martian Prefix fe80::/64
+chip-1: Martian Prefix 127.0.0.1/32
+chip-1: Martian Prefix ::1/128
+
+
+
+
+* And now we have, like, this 5 phase commit
+
+I am bufferbloating the link now
+
+172.26.20.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted 172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.96.103 proto babel metric 4294967295 onlink 
+Deleted unreachable 172.26.96.103 proto babel metric 4294967295 onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+Deleted unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+fd99::4 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+
+
+* And I just showed that expires does not work on the chips at all!
+
+root@chip-1:~# ip -6 route add fcf2:4444::/64 dev babel0 expires 30
+
+They are kernel 4.4.x
+
+So my test... doesn't work. Or I have to build a modern iproute that I didn't
+before. Nope. I'm running the latest iproute. So I flush ip -6 route flush proto gated
+
+Of course, now when I do that, I end with both unreachable routes again
+
+fcf2:530f:f4c8:6::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:6::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:7::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:7::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:8::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:8::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:9::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:9::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:a::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:a::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:b::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:b::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:c::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:c::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:d::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:d::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+
+There must be some other subtly I'm missing. 
+
+* I'm watching one chip being very unstable
+I'm on the same wifi link - so that's a stronger metric
+vs ethernet - apu2 - router - usb0 (or wifi) to - chip
+** TODO Get timestamps to work on logs
+172.26.96.64 via 172.26.16.1 dev eno1 proto babel onlink 
+fd99::64 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+** Hmm... lets run fixusb
+
+traceroute to 172.26.96.64 (172.26.96.64), 30 hops max, 60 byte packets
+ 1  172.26.16.1 (172.26.16.1)  0.355 ms  0.243 ms  0.347 ms
+ 2  172.26.96.64 (172.26.96.64)  1.334 ms
+
+So the actual path is really confused... I'm getting that to 16.1. Which I am
+one hop from. 
+
+I am still doing weird stuff with addresses via protos for fixed things
+and maybe lacking correct base metrics.
+ 
+* So now most of the chips don't have a default ipv6 route
+not sure if that matters - they shouldn't have one if they don't have a valid
+ipv6 address...
+
+but they should be getting that from ra??
+
+and they use rules here so that's where their default goes...
+
+pdsh> ip -6 route | grep default
+gw3: ssh: connect to host gw3 port 22: Network is unreachable
+pdsh@dancer: gw3: ssh exited with exit code 255
+gw2: default from 2601:646:4101:a740::/60 via fe80::20d:b9ff:fe41:6c2c dev br-lan  proto babel  metric 1024  pref medium
+par: default via fe80::c256:27ff:fe6c:953f dev eth0 proto babel metric 1024  pref medium
+apu: default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev enp3s0  proto babel  metric 1024  pref medium
+gw4: default from 2601:646:4101:a740::/60 via fe80::221:63ff:fe2f:f2f4 dev wlan0  proto babel  metric 1024  pref medium
+pdsh@dancer: chip-1: ssh exited with exit code 1
+gw1: default from 2001:558:6045:bd:7073:30a8:87fc:c299 via fe80::201:5cff:fe63:e446 dev eth0  proto static  metric 512  pref medium
+gw1: default from 2601:646:4101:a740::/60 via fe80::201:5cff:fe63:e446 dev eth0  proto static  metric 512  pref medium
+pdsh@dancer: chip-6: ssh exited with exit code 1
+pdsh@dancer: chip-5: ssh exited with exit code 1
+pdsh@dancer: chip-4: ssh exited with exit code 1
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+
+
 * So a righter behavior is to first flush the infinite route
-And that seems to work.
+And that seems to work. The two metrics can co-exist otherwise.
 
 I will never understand why on first startup babel tends to choose the worst
 route first.
