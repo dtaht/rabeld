@@ -1,3 +1,340 @@
+* These are left over from somewhere on apu2
+
+adding babel to flush all it's routes might be good -
+both on start and stop
+
+Or it could be 64bit biting me.
+
+* The mips box has some GREAT stuff from the pi3
+
+medium
+fd99::10 from a028:9900:cc00::/42 via fe80::ba27:ebff:fec9:3c08 dev br-lan  prot
+o babel  metric 1024  pref medium
+fd99::10 from e417:a100::/25 via fe80::ba27:ebff:fec9:3c08 dev br-lan  proto bab
+el  metric 1024  pref medium
+
+
+* The mips boxes take a long time (running stock babel)
+to clear their backlogged route caches.
+
+Idea - Opportunistic garbage collection somewhere as we walk big tables, see if
+we can expire them. Maybe this aready exists...
+
+Guess I need to build this for mips now.
+
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+pdsh> 
+pdsh> 
+pdsh> ip -6 route show | wc -l
+gw2: 4076
+chip-6: 35
+chip-4: 38
+chip-1: 35
+par: 4087
+apu: 51
+gw3: 27
+gw4: 2539
+chip-5: 229
+gw1: 3087
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+pdsh> ip -6 route show | wc -l
+gw2: 2892
+chip-6: 35
+par: 2493
+chip-1: 35
+apu: 51
+chip-5: 36
+gw3: 27
+gw4: 2027
+gw1: 2283
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+chip-4: 38
+
+
+* TODO if we run out of space writing the log file
+
+close it, delete it, start over. Forgot I was logging so heavily on lede
+
+Also just switch to syslog in general
+
+
+* disabling the neon code first
+
+This box is also compiled for -Os and -g
+
+All boxes on this run ended up -Os and -g
+rebuilding chip-1
+** Recompiled without neon, still has bad xroutes.
+:whew:
+
+hit it with 4k routes this time... wiped out the network pretty good.
+
+Route_stream is the bottleneck with Os and neo
+min_conflict O3 neon.
+
+* lscpu
+
+helpful. Never knew that existed.
+
+* TODO expires random elsewhere
+
+Pretty sure that's just me not using initialized memory anymore.
+
+I note that "expires" was in there in part to try to find a memory write...
+
+add xroute fd55::/64-::/0 prefix fd55::/64 from ::/0 metric 0 expires -1694434440
+add xroute fd99::3/128-::/0 prefix fd99::3/128 from ::/0 metric 0 expires -65536
+
+
+* TODO dump "used to exit" on end of file
+
+It isn't now.... Probably my bug
+
+root@chip-1:~# echo dump | nc ::1 33123 | grep -v 'expires 0'
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host chip-1
+my-id 3a:a2:8c:ff:fe:5d:f9:e5
+ok
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5 ipv4 172.26.201.127
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add neighbour ea858 address fe80::3aa2:8cff:fe5d:effb if wlan0 reach fff9 rxcost 256 txcost 346 rtt 241.520 rttcost 2048 cost 2394
+add neighbour 34478 address fe80::3aa2:8cff:fe5d:d369 if wlan0 reach fdff rxcost 260 txcost 344 rtt 220.110 rttcost 2048 cost 2397
+add neighbour 35d90 address fe80::16cc:20ff:fee5:64c1 if wlan0 reach ffff rxcost 256 txcost 256 rtt 89.622 rttcost 1525 cost 1781
+add neighbour 33a08 address fe80::221:63ff:fe2f:f2f4 if wlan0 reach ffff rxcost 256 txcost 256 rtt 209.427 rttcost 2048 cost 2304
+add neighbour 32128 address fe80::7ec7:9ff:fede:2bb5 if wlan0 reach ffff rxcost 256 txcost 262 rtt 265.876 rttcost 2048 cost 2310
+ok
+
+dump
+
+
+* TODO Maybe if I don't have a src specific addr I don't write
+it, assuming calloc does the job for me?
+
+* expires non-zero - this is a clue
+And I also killed calloc. And am probably not zeroing expires. That said...
+scribbling on memory somewhere... 
+
+root@pi3:~# telnet ::1 33123
+Trying ::1...
+Connected to ::1.
+Escape character is '^]'.
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host pi3
+my-id ba:27:eb:ff:fe:c9:3c:08
+ok
+dump
+add interface eth0 up true ipv6 fe80::ba27:ebff:fec9:3c08 ipv4 172.26.16.4
+add interface eth1 up false
+add interface wlan1 up false
+add interface wlan0 up false
+add interface wlan2 up false
+add neighbour 37c988 address fe80::32b5:c2ff:fe75:7faa if eth0 reach ffff rxcost 96 txcost 256 rtt 0.785 rttcost 0 cost 256
+add neighbour 37e318 address fe80::20d:b9ff:fe41:6c2d if eth0 reach ffff rxcost 96 txcost 96 rtt 1.374 rttcost 0 cost 96
+add neighbour 37a128 address fe80::eea8:6bff:fefe:9a2 if eth0 reach ffff rxcost 96 txcost 96 rtt 0.615 rttcost 0 cost 96
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+add route 37ce50 prefix ::/0 from 2601:646:4101:a740::/60 installed yes id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c730 prefix ::/0 from 2601:646:4101:a740::/60 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 352 refmetric 256 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cc58 prefix 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c3b0 prefix 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cca0 prefix 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c440 prefix 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d1a8 prefix 0.0.0.0/0 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e1b0 prefix 0.0.0.0/0 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cf70 prefix 0.0.0.0/0 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 320 refmetric 64 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37d090 prefix 172.26.16.0/24 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37bfe8 prefix 172.26.16.0/24 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cee0 prefix 172.26.16.0/24 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37caa0 prefix 172.26.20.0/22 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c310 prefix 172.26.20.0/22 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cbc8 prefix 172.26.64.0/24 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c0a0 prefix 172.26.64.0/24 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37dcd0 prefix 172.26.96.61/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:f9:e5 metric 488 refmetric 392 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dbdb0 prefix 172.26.96.61/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:f9:e5 metric 612 refmetric 516 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37cdc0 prefix 172.26.96.64/32 from ::/0 installed yes id 7e:c7:09:ff:fe:de:2b:b5 metric 480 refmetric 224 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37de10 prefix 172.26.96.64/32 from ::/0 installed no id 7e:c7:09:ff:fe:de:2b:b5 metric 486 refmetric 390 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dd290 prefix 172.26.96.65/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:ef:fb metric 444 refmetric 348 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d130 prefix 172.26.96.65/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:ef:fb metric 456 refmetric 360 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d9c0 prefix 172.26.96.66/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:d3:69 metric 480 refmetric 384 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d770 prefix 172.26.96.66/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:d3:69 metric 580 refmetric 484 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37ca48 prefix 172.26.96.100/32 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c260 prefix 172.26.96.100/32 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cb50 prefix 172.26.96.103/32 from ::/0 installed yes id ba:27:eb:ff:fe:87:21:77 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37df50 prefix 172.26.96.103/32 from ::/0 installed no id ba:27:eb:ff:fe:87:21:77 metric 609 refmetric 513 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cc10 prefix 172.26.130.0/23 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c140 prefix 172.26.130.0/23 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cd30 prefix 172.26.200.0/22 from ::/0 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 320 refmetric 224 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c5f0 prefix 172.26.200.0/22 from ::/0 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 416 refmetric 320 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d048 prefix 198.27.232.0/22 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e120 prefix 198.27.232.0/22 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37ce08 prefix 2601:646:4101:a740::/60 from ::/0 installed yes id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c6a0 prefix 2601:646:4101:a740::/60 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 352 refmetric 256 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cfb8 prefix 2602:24c:61be:8210::/60 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e000 prefix 2602:24c:61be:8210::/60 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cce8 prefix fd32:7d58:8d63::/48 from ::/0 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c518 prefix fd32:7d58:8d63::/48 from ::/0 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37e2d0 prefix fd55::/64 from ::/0 installed yes id ee:a8:6b:ff:fe:fe:09:a2 metric 96 refmetric 0 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37c9f0 prefix fd69:3860:b137::/48 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37d878 prefix fd69:3860:b137::/48 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37e240 prefix fd99::3/128 from ::/0 installed yes id ee:a8:6b:ff:fe:fe:09:a2 metric 96 refmetric 0 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37caf8 prefix fd99::4/128 from ::/0 installed yes id ba:27:eb:ff:fe:87:21:77 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37dec0 prefix fd99::4/128 from ::/0 installed no id ba:27:eb:ff:fe:87:21:77 metric 609 refmetric 513 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37c4d0 prefix fd99::61/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:f9:e5 metric 488 refmetric 392 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d7c8 prefix fd99::61/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:f9:e5 metric 612 refmetric 516 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37cd78 prefix fd99::64/128 from ::/0 installed yes id 7e:c7:09:ff:fe:de:2b:b5 metric 480 refmetric 224 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37dd80 prefix fd99::64/128 from ::/0 installed no id 7e:c7:09:ff:fe:de:2b:b5 metric 486 refmetric 390 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dd248 prefix fd99::65/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:ef:fb metric 444 refmetric 348 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d0d8 prefix fd99::65/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:ef:fb metric 456 refmetric 360 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d920 prefix fd99::66/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:d3:69 metric 480 refmetric 384 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d718 prefix fd99::66/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:d3:69 metric 580 refmetric 484 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d000 prefix fde8:9cb6:b42e::/60 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e090 prefix fde8:9cb6:b42e::/60 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+ok
+
+ok
+quit
+Connection closed by foreign host.
+root@pi3:~# vi /tmp/babel.log 
+root@pi3:~# ps aux | grep babel
+root     21961  0.2  0.2   2760  2228 ?        Ss   00:09   0:14 /usr/sbin/babeld -D -I /var/run/babeld.pid -z3 -L /home/log/babel.log -G 33123 -c /etc/babeld.conf -S /var/lib/babeld/state eth0 eth1 wlan0 wlan1 wlan2
+root     28225  0.0  0.2   4280  2008 pts/1    S+   01:46   0:00 grep babel
+root@pi3:~# echo dump | nc  ::1 33123 | grep xroute 
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+
+* Need ipv6 checksums enabled
+
+Perhaps it's at the source. Or at the dest.
+
+Gotta find my original pi3 bug report.
+
+ium
+fd99::10 from 4437:3f00:7037:3f00::/56 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from ec36:3f00:1837:3f00::/56 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+
+
+root@pi3:~# 
+root@pi3:~# ethtool eth0
+Settings for eth0:
+	Supported ports: [ TP MII ]
+	Supported link modes:   10baseT/Half 10baseT/Full 
+	                        100baseT/Half 100baseT/Full 
+	Supported pause frame use: No
+	Supports auto-negotiation: Yes
+	Advertised link modes:  10baseT/Half 10baseT/Full 
+	                        100baseT/Half 100baseT/Full 
+	Advertised pause frame use: Symmetric Receive-only
+	Advertised auto-negotiation: Yes
+	Link partner advertised link modes:  10baseT/Half 10baseT/Full 
+	                                     100baseT/Half 100baseT/Full 
+	Link partner advertised pause frame use: No
+	Link partner advertised auto-negotiation: Yes
+	Speed: 100Mb/s
+	Duplex: Full
+	Port: MII
+	PHYAD: 1
+	Transceiver: internal
+	Auto-negotiation: on
+	Supports Wake-on: pumbag
+	Wake-on: d
+	Current message level: 0x00000007 (7)
+			       drv probe link
+	Link detected: yes
+root@pi3:~# 
+root@pi3:~# telnet ::1 33123
+Trying ::1...
+Connected to ::1.
+Escape character is '^]'.
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host pi3
+my-id ba:27:eb:ff:fe:c9:3c:08
+ok
+dump
+add interface eth0 up true ipv6 fe80::ba27:ebff:fec9:3c08 ipv4 172.26.16.4
+add interface eth1 up false
+add interface wlan1 up false
+add interface wlan0 up false
+add interface wlan2 up false
+add neighbour 37c988 address fe80::32b5:c2ff:fe75:7faa if eth0 reach ffff rxcost 96 txcost 256 rtt 0.785 rttcost 0 cost 256
+add neighbour 37e318 address fe80::20d:b9ff:fe41:6c2d if eth0 reach ffff rxcost 96 txcost 96 rtt 1.374 rttcost 0 cost 96
+add neighbour 37a128 address fe80::eea8:6bff:fefe:9a2 if eth0 reach ffff rxcost 96 txcost 96 rtt 0.615 rttcost 0 cost 96
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+
+
 * I have seen the pi3 do weird things when having power issues
 But I have a good power supply in it now... but there are
 two (unused) wifi usb sticks in it....
