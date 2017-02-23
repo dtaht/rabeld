@@ -1,8 +1,8 @@
 #!/bin/bash
 # Run test for 300 seconds
 HOST=`hostname`
-EXPIRES=100
-END=16
+EXPIRES=600
+END=512
 IFACE=babel0
 PROTO=8 # reuse gated for this sort of testing
 PLEN=64 # FIXME: a good idea to start testing variable length prefixes too
