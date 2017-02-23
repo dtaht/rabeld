@@ -1,3 +1,60 @@
+* Reverted the malloc patch
+
+Restarted it on the pi3. Life is better now. Abusing it still.
+
+DOES NOT EXPLAIN expires nonzero still, even if it is more rare.
+Compiled without neon too.
+
+root@pi3:~/git/rabeld/tests/routing_table_of_death# echo dump | nc ::1 33123 | grep xroute | grep -v 'expires 0'
+add xroute fc70:5089:84ed:18::/64-::/0 prefix fc70:5089:84ed:18::/64 from ::/0 metric 0 expires -4016846
+add xroute fc70:5089:84ed:19::/64-::/0 prefix fc70:5089:84ed:19::/64 from ::/0 metric 0 expires -65536
+
+** Maybe points at the proto unsigned char change or the plen change
+
+That could overwrite the plen and src_plen
+
+Even then I aligned the darn thing to a cacheline...
+
+** TODO [P1] BUT - it is considered to be a signed value in kernel_netlink!
+oh, that's subtle. Was that always the case?
+
+STILL think it is netlink. Long past time for valgrind.
+But This is always true for example...
+
+    if(route->src_plen >= 0) {
+        if(!inet_ntop(AF_INET6, route->src_prefix,
+                      src_addr_prefix, sizeof(src_addr_prefix))) {
+            kdebugf("Couldn't format kernel route for printing.");
+            return;
+        }
+
+And here it's now an int
+
+add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
+
+And here:
+
+int add_xroute(unsigned char prefix[16], unsigned char plen,
+xroute.h:               unsigned char src_prefix[16], unsigned char src_plen,
+
+util.h:int martian_prefix(const unsigned char *prefix, int plen) ATTRIBUTE ((pure));
+util.h:int set_src_prefix(unsigned char *src_addr, unsigned char *src_plen);
+util.h:// v4 = plen >= 96 && v4mapped(prefix);
+
+message.c:    normalize_prefix(p_r, prefix, plen < 0 ? 128 : ae == 1 ? plen + 96 : plen);
+
+struct xroute {
+    unsigned char prefix[16];
+    unsigned char src_prefix[16];
+    unsigned char plen;    // FIXME plen is unsigned char here
+    unsigned char src_plen;
+    unsigned short metric; // FIXME metric is a short here?
+    unsigned int ifindex;
+    int expires;
+    unsigned char proto;
+} CACHELINE_ALIGN;
+
+
 * These are left over from somewhere on apu2
 
 adding babel to flush all it's routes might be good -
