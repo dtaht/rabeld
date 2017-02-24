@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_RULE
+#define _BABEL_RULE
 #define SRC_TABLE_NUM 10
 
 extern int src_table_idx; /* number of the first table */
@@ -31,3 +32,4 @@ int find_table(const unsigned char *dest, unsigned short plen,
                const unsigned char *src, unsigned short src_plen);
 void release_tables(void);
 int check_rules(void);
+#endif

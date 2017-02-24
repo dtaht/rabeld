@@ -19,13 +19,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_ROUTE
+#define _BABEL_ROUTE
 #define DIVERSITY_NONE 0
 #define DIVERSITY_INTERFACE_1 1
 #define DIVERSITY_CHANNEL_1 2
 #define DIVERSITY_CHANNEL 3
 
 struct babel_route {
+    struct babel_route *next;
     struct source *src;
     unsigned short refmetric;
     unsigned short cost;
@@ -34,14 +36,14 @@ struct babel_route {
     struct neighbour *neigh;
     unsigned char nexthop[16];
     time_t time;
+    int expires;
     unsigned short hold_time;    /* in seconds */
     unsigned short smoothed_metric; /* for route selection */
     time_t smoothed_metric_time;
     short installed;
     short channels_len;
     unsigned char *channels;
-    struct babel_route *next;
-};
+} CACHELINE_ALIGN;
 
 #define ROUTE_ALL 0
 #define ROUTE_INSTALLED 1
@@ -125,3 +127,4 @@ void route_changed(struct babel_route *route,
                    struct source *oldsrc, unsigned short oldmetric);
 void route_lost(struct source *src, unsigned oldmetric);
 void expire_routes(void);
+#endif

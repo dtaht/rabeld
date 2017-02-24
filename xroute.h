@@ -19,16 +19,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_XROUTE
+#define _BABEL_XROUTE
 
 struct xroute {
     unsigned char prefix[16];
-    unsigned char plen;
     unsigned char src_prefix[16];
+    unsigned char plen;    // FIXME plen is unsigned char here
     unsigned char src_plen;
-    unsigned short metric;
+    unsigned short metric; // FIXME metric is a short here?
     unsigned int ifindex;
-    int proto;
-};
+    int expires;
+    unsigned char proto;
+} CACHELINE_ALIGN;
 
 struct xroute_stream;
 
@@ -45,3 +48,4 @@ void xroute_stream_done(struct xroute_stream *stream);
 int kernel_addresses(int ifindex, int ll,
                      struct kernel_route *routes, int maxroutes);
 int check_xroutes(int send_updates);
+#endif

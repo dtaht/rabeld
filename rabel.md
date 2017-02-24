@@ -165,6 +165,23 @@ There are also other means of detecting a link down or up (in wifi AP/STA mode,
 disassociation, a variety of means in tunnels and ethernet) that are faster than
 babel's usual basic metrics.
 
+## Automagic Prefix aggregation
+
+Adding a means to automatically aggregate announced routes into smaller
+announcements would be a goodness.
+
+A possible means to get there would be to generate a covering route,
+and use a new AE to announce it, in addition to announcing the routing
+table. A router attempting aggregation would re-announce the aggregated
+route using that AE. The presence of that AE in a message indicates to
+the other router(s) that they are AEA capable (Aggregatating Encoding Aggregate), and also trigger the sending router of a set of routes to confirm that
+yes, indeed, the routes it just announced are aggregatable. If
+all routers on one side of a link agree to use AEA, we AEA universally. 
+
+This would make carrying large numbers of routes faster. See [routing_table_of_death](tests/routing_table_of_death).
+
+AEA routes do not blackhole other routes.
+
 ## Atomic updates
 
 The present delete/add system for updating routes causes packet loss and

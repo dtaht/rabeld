@@ -19,20 +19,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_SOURCE
+#define _BABEL_SOURCE
 
 #define SOURCE_GC_TIME 200
 
 struct source {
-    unsigned char id[8];
     unsigned char prefix[16];
-    unsigned char plen;
     unsigned char src_prefix[16];
+    unsigned char id[8];
+    unsigned char plen;
     unsigned char src_plen;
     unsigned short seqno;
     unsigned short metric;
     unsigned short route_count;
     time_t time;
-};
+} CACHELINE_ALIGN;
 
 struct source *find_source(const unsigned char *id,
                            const unsigned char *prefix,
@@ -46,3 +48,4 @@ void update_source(struct source *src,
                    unsigned short seqno, unsigned short metric);
 void expire_sources(void);
 void check_sources_released(void);
+#endif

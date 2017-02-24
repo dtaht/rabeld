@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_RESEND
+#define _BABEL_RESEND
 #define REQUEST_TIMEOUT 65000
 #define RESEND_MAX 3
 
@@ -27,42 +28,168 @@ THE SOFTWARE.
 #define RESEND_UPDATE 2
 
 struct resend {
-    unsigned char kind;
-    unsigned char max;
-    unsigned short delay;
-    struct timeval time;
-    unsigned char prefix[16];
-    unsigned char plen;
-    unsigned char src_prefix[16];
-    unsigned char src_plen;
-    unsigned short seqno;
-    unsigned char id[8];
-    struct interface *ifp;
     struct resend *next;
-};
+    unsigned char id[8];
+    unsigned char kind;
+    unsigned char plen;
+    unsigned char src_plen;
+    unsigned char max;
+    unsigned char prefix[16]; // FIXME - still not 16 byte aligned on x86_64
+    unsigned char src_prefix[16];
+    unsigned short delay;
+    unsigned short seqno;
+    struct timeval time;
+    struct interface *ifp;
+} CACHELINE_ALIGN;
 
 extern struct timeval resend_time;
+extern struct resend *to_resend;
 
-struct resend *find_request(const unsigned char *prefix, unsigned char plen,
-                    const unsigned char *src_prefix, unsigned char src_plen,
-                    struct resend **previous_return);
+void
+recompute_resend_time();
+
+static inline int
+resend_match(struct resend *resend,
+             int kind, const unsigned char *prefix, unsigned char plen,
+             const unsigned char *src_prefix, unsigned char src_plen)
+{
+    return (resend->kind == kind &&
+            resend->plen == plen && v6_equal(resend->prefix, prefix) &&
+            resend->src_plen == src_plen &&
+            v6_equal(resend->src_prefix, src_prefix) );
+}
+
+
 void flush_resends(struct neighbour *neigh);
+
+
+// Pointer walking sucks. Any way I try to re-org this it is going to suck
+
+static inline struct resend *
+find_resend(int kind, const unsigned char *prefix, unsigned char plen,
+            const unsigned char *src_prefix, unsigned char src_plen,
+            struct resend **previous_return)
+{
+    struct resend *current, *previous;
+    __builtin_prefetch(to_resend,0,1); // if I keep this should lift it to the caller
+    current = to_resend;
+    previous = NULL;
+    while(current) {
+	__builtin_prefetch(current->next,0,1);
+        if(resend_match(current, kind, prefix, plen, src_prefix, src_plen)) {
+            if(previous_return)
+                *previous_return = previous;
+            return current;
+        }
+        previous = current;
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+static inline struct resend *
+find_resend2(int kind, const unsigned char *prefix, unsigned char plen,
+            const unsigned char *src_prefix, unsigned char src_plen,
+            struct resend **previous_return)
+{
+    struct resend *current, *previous;
+
+    previous = NULL;
+    current = to_resend;
+    while(current) {
+        if(resend_match(current, kind, prefix, plen, src_prefix, src_plen)) {
+            if(previous_return)
+                *previous_return = previous;
+            return current;
+        }
+        previous = current;
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+static inline struct resend *
+find_request(const unsigned char *prefix, unsigned char plen,
+             const unsigned char *src_prefix, unsigned char src_plen,
+             struct resend **previous_return)
+{
+    return find_resend(RESEND_REQUEST, prefix, plen, src_prefix, src_plen,
+                       previous_return);
+}
+
+
+
 int record_resend(int kind, const unsigned char *prefix, unsigned char plen,
                   const unsigned char *src_prefix, unsigned char src_plen,
                   unsigned short seqno, const unsigned char *id,
                   struct interface *ifp, int delay);
-int unsatisfied_request(const unsigned char *prefix, unsigned char plen,
-                        const unsigned char *src_prefix, unsigned char src_plen,
-                        unsigned short seqno, const unsigned char *id);
+static inline int
+resend_expired(struct resend *resend)
+{
+    switch(resend->kind) {
+    case RESEND_REQUEST:
+        return timeval_minus_msec(&now, &resend->time) >= REQUEST_TIMEOUT;
+    default:
+        return resend->max <= 0;
+    }
+}
+
+
+static inline int
+unsatisfied_request(const unsigned char *prefix, unsigned char plen,
+                    const unsigned char *src_prefix, unsigned char src_plen,
+                    unsigned short seqno, const unsigned char *id)
+{
+    struct resend *request;
+
+    request = find_request(prefix, plen, src_prefix, src_plen, NULL);
+    if(request == NULL || resend_expired(request))
+        return 0;
+
+    if(memcmp(request->id, id, 8) != 0 ||
+       seqno_compare(request->seqno, seqno) <= 0)
+        return 1;
+
+    return 0;
+}
+
+static inline int
+satisfy_request(const unsigned char *prefix, unsigned char plen,
+                const unsigned char *src_prefix, unsigned char src_plen,
+                unsigned short seqno, const unsigned char *id,
+                struct interface *ifp)
+{
+    struct resend *request, *previous;
+
+    request = find_request(prefix, plen, src_prefix, src_plen, &previous);
+    if(request == NULL)
+        return 0;
+
+    if(ifp != NULL && request->ifp != ifp)
+        return 0;
+
+    if(memcmp(request->id, id, 8) != 0 ||
+       seqno_compare(request->seqno, seqno) <= 0) {
+        /* We cannot remove the request, as we may be walking the list right
+           now.  Mark it as expired, so that expire_resend will remove it. */
+        request->max = 0;
+        request->time.tv_sec = 0;
+        recompute_resend_time();
+        return 1;
+    }
+
+    return 0;
+}
+
+
 int request_redundant(struct interface *ifp,
                       const unsigned char *prefix, unsigned char plen,
                       const unsigned char *src_prefix, unsigned char src_plen,
                       unsigned short seqno, const unsigned char *id);
-int satisfy_request(const unsigned char *prefix, unsigned char plen,
-                    const unsigned char *src_prefix, unsigned char src_plen,
-                    unsigned short seqno, const unsigned char *id,
-                    struct interface *ifp);
 
 void expire_resend(void);
 void recompute_resend_time(void);
 void do_resend(void);
+#endif

@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <string.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -52,12 +53,23 @@ source_compare(const unsigned char *id,
     if(plen > src->plen)
         return 1;
 
-    rc = memcmp(prefix, src->prefix, 16);
+/*
+    no we feed this to a compare routine
+    but I don't think we care if it is not true or false
+    rc = v6_equal(prefix, src->prefix);
+    if(rc == false)
+        return 1;
+*/
+    rc = memcmp(prefix, src->prefix,16);
     if(rc != 0)
         return rc;
-
-    rc = memcmp(src_prefix, src->src_prefix, 16);
-    if(rc != 0)
+/*
+    rc = v6_equal(src_prefix, src->src_prefix);
+    if(rc == false)
+        return 1;
+*/
+    rc = memcmp(src_prefix, src->src_prefix,16);
+    if(rc != 0 )
         return rc;
 
     return 0;

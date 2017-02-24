@@ -1,4 +1,6 @@
 *.o
+babeld-whole
+babeld-whole.c
 babeld
 babeld.html
 version.h

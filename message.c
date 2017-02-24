@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -53,9 +54,6 @@ int unicast_buffered = 0;
 unsigned char *unicast_buffer = NULL;
 struct neighbour *unicast_neighbour = NULL;
 struct timeval unicast_flush_timeout = {0, 0};
-
-static const unsigned char v4prefix[16] =
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
 
 #define MAX_CHANNEL_HOPS 20
 
@@ -817,6 +815,7 @@ void
 flushbuf(struct interface *ifp)
 {
     int rc;
+    int u;
     struct sockaddr_in6 sin6;
 
     assert(ifp->buffered <= ifp->bufsize);
@@ -833,11 +832,13 @@ flushbuf(struct interface *ifp)
             sin6.sin6_port = htons(protocol_port);
             sin6.sin6_scope_id = ifp->ifindex;
             DO_HTONS(packet_header + 2, ifp->buffered);
-            fill_rtt_message(ifp);
+            u = fill_rtt_message(ifp);
+	    if(u==1) setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_TCLASS, &ds_urgent, sizeof(ds_urgent));
             rc = babel_send(protocol_socket,
                             packet_header, sizeof(packet_header),
                             ifp->sendbuf, ifp->buffered,
                             (struct sockaddr*)&sin6, sizeof(sin6));
+	    if(u==1) setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_TCLASS, &ds, sizeof(ds));
             if(rc < 0)
                 perror("send");
         } else {
@@ -1229,6 +1230,9 @@ really_send_update(struct interface *ifp,
     }
 }
 
+// FIXME all callers have to check for true or false
+// if I want to get away from memcmp
+
 static int
 compare_buffered_updates(const void *av, const void *bv)
 {
@@ -1260,7 +1264,7 @@ compare_buffered_updates(const void *av, const void *bv)
     else if(a->plen > b->plen)
         return -1;
 
-    rc = memcmp(a->prefix, b->prefix, 16);
+    rc = memcmp(a->prefix, b->prefix,16);
     if(rc != 0)
         return rc;
 
@@ -1269,7 +1273,7 @@ compare_buffered_updates(const void *av, const void *bv)
     else if(a->src_plen > b->src_plen)
         return 1;
 
-    return memcmp(a->src_prefix, b->src_prefix, 16);
+    return memcmp(a->src_prefix, b->src_prefix,16);
 }
 
 void
@@ -1307,6 +1311,11 @@ flushupdates(struct interface *ifp)
         /* In order to send fewer update messages, we want to send updates
            with the same router-id together, with IPv6 going out before IPv4. */
 
+	// Actually in my network I have a metric ton of ipv6, and less ipv4
+	// and you really notice when ipv4 goes down. FIXME. Think on better
+	// ideas for prioritizing route transfer - like the best routes first
+	// source specific, defaults, etc.
+
         for(i = 0; i < n; i++) {
             route = find_installed_route(b[i].prefix, b[i].plen,
                                          b[i].src_prefix, b[i].src_plen);
@@ -1315,6 +1324,10 @@ flushupdates(struct interface *ifp)
             else
                 memcpy(b[i].id, myid, 8);
         }
+
+// FIXME - memcmp conversion issue
+// what if two things are unequal instead of different?
+// How does less than etc work? Do I care about exact memcmp here?
 
         qsort(b, n, sizeof(struct buffered_update), compare_buffered_updates);
 
@@ -1326,8 +1339,8 @@ flushupdates(struct interface *ifp)
             if(last_prefix &&
                b[i].plen == last_plen &&
                b[i].src_plen == last_src_plen &&
-               memcmp(b[i].prefix, last_prefix, 16) == 0 &&
-               memcmp(b[i].src_prefix, last_src_prefix, 16) == 0)
+               v6_equal(b[i].prefix, last_prefix) &&
+               v6_equal(b[i].src_prefix, last_src_prefix))
                 continue;
 
             xroute = find_xroute(b[i].prefix, b[i].plen,
@@ -1608,7 +1621,6 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     int ll;
     int send_rtt_data;
     int msglen;
-    int rc;
 
     if(neigh == NULL && ifp == NULL) {
         struct interface *ifp_aux;
@@ -1639,8 +1651,12 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     rxcost = neighbour_rxcost(neigh);
     interval = (ifp->hello_interval * 3 + 9) / 10;
 
+    /* Conceptually, an IHU is a unicast message.  We usually send them as
+       multicast, since this allows aggregation into a single packet and
+       avoids an ARP exchange.  If we already have a unicast message queued
+       for this neighbour, however, we might as well piggyback the IHU. */
     debugf("Sending %sihu %d on %s to %s.\n",
-           "unicast ",
+           unicast_neighbour == neigh ? "unicast " : "",
            rxcost,
            neigh->ifp->name,
            format_address(neigh->address));
@@ -1648,7 +1664,9 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
     ll = linklocal(neigh->address);
 
     if((ifp->flags & IF_TIMESTAMPS) && neigh->hello_send_us &&
-       /* Checks whether the RTT data is not too old to be sent. */
+       /* Checks whether the RTT data is not too old to be sent. 
+          FIXME - Bufferbloat and ComputeBloat possible here
+       */
        timeval_minus_msec(&now, &neigh->hello_rtt_receive_time) < 1000000) {
         send_rtt_data = 1;
     } else {
@@ -1660,24 +1678,44 @@ send_ihu(struct neighbour *neigh, struct interface *ifp)
        optional 10-bytes sub-TLV for timestamps (used to compute a RTT). */
     msglen = (ll ? 14 : 22) + (send_rtt_data ? 10 : 0);
 
-    rc = start_unicast_message(neigh, MESSAGE_IHU, msglen);
-    if(rc < 0) return;
-    accumulate_unicast_byte(neigh, ll ? 3 : 2);
-    accumulate_unicast_byte(neigh, 0);
-    accumulate_unicast_short(neigh, rxcost);
-    accumulate_unicast_short(neigh, interval);
-    if(ll)
-        accumulate_unicast_bytes(neigh, neigh->address + 8, 8);
-    else
-        accumulate_unicast_bytes(neigh, neigh->address, 16);
-    if(send_rtt_data) {
-        accumulate_unicast_byte(neigh, SUBTLV_TIMESTAMP);
-        accumulate_unicast_byte(neigh, 8);
-        accumulate_unicast_int(neigh, neigh->hello_send_us);
-        accumulate_unicast_int(neigh,
-                               time_us(neigh->hello_rtt_receive_time));
+    if(unicast_neighbour != neigh) {
+        start_message(ifp, MESSAGE_IHU, msglen);
+        accumulate_byte(ifp, ll ? 3 : 2);
+        accumulate_byte(ifp, 0);
+        accumulate_short(ifp, rxcost);
+        accumulate_short(ifp, interval);
+        if(ll)
+            accumulate_bytes(ifp, neigh->address + 8, 8);
+        else
+            accumulate_bytes(ifp, neigh->address, 16);
+        if(send_rtt_data) {
+            accumulate_byte(ifp, SUBTLV_TIMESTAMP);
+            accumulate_byte(ifp, 8);
+            accumulate_int(ifp, neigh->hello_send_us);
+            accumulate_int(ifp, time_us(neigh->hello_rtt_receive_time));
+        }
+        end_message(ifp, MESSAGE_IHU, msglen);
+    } else {
+        int rc;
+        rc = start_unicast_message(neigh, MESSAGE_IHU, msglen);
+        if(rc < 0) return;
+        accumulate_unicast_byte(neigh, ll ? 3 : 2);
+        accumulate_unicast_byte(neigh, 0);
+        accumulate_unicast_short(neigh, rxcost);
+        accumulate_unicast_short(neigh, interval);
+        if(ll)
+            accumulate_unicast_bytes(neigh, neigh->address + 8, 8);
+        else
+            accumulate_unicast_bytes(neigh, neigh->address, 16);
+        if(send_rtt_data) {
+            accumulate_unicast_byte(neigh, SUBTLV_TIMESTAMP);
+            accumulate_unicast_byte(neigh, 8);
+            accumulate_unicast_int(neigh, neigh->hello_send_us);
+            accumulate_unicast_int(neigh,
+                                   time_us(neigh->hello_rtt_receive_time));
+        }
+        end_unicast_message(neigh, MESSAGE_IHU, msglen);
     }
-    end_unicast_message(neigh, MESSAGE_IHU, msglen);
 }
 
 /* Send IHUs to all marginal neighbours */

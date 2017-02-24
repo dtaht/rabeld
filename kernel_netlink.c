@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -41,17 +42,23 @@ THE SOFTWARE.
 #include <linux/rtnetlink.h>
 #include <linux/if_bridge.h>
 #include <linux/fib_rules.h>
+#include <linux/filter.h>
 #include <net/if_arp.h>
-
-#if(__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ <= 5)
-#define RTA_TABLE 15
-#endif
+#include <sched.h>
 
 #include "babeld.h"
 #include "kernel.h"
 #include "util.h"
 #include "interface.h"
 #include "configuration.h"
+
+// enum only exported by linux 4.10+
+
+#ifdef HAVE_EXPIRES
+#ifndef RTA_EXPIRES
+#define RTA_EXPIRES (RTA_ENCAP+1)
+#endif 
+#endif
 
 #ifndef MAX_INTERFACES
 #define MAX_INTERFACES 20
@@ -266,6 +273,11 @@ netlink_socket(struct netlink *nl, uint32_t groups)
             perror("setsockopt(SO_RCVBUF)");
         }
     }
+    rc = setsockopt(nl->sock, SOL_SOCKET, SO_SNDBUF,
+                        &rcvsize, sizeof(rcvsize));
+    if(rc < 0) {
+         perror("setsockopt(SO_SNDBUF)");
+        }
 
     rc = bind(nl->sock, (struct sockaddr *)&nl->sockaddr, nl->socklen);
     if(rc < 0)
@@ -310,7 +322,7 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
     int done = 0;
     int skip = 0;
 
-    char buf[8192];
+    char buf[65536*2];
 
     memset(&nladdr, 0, sizeof(nladdr));
     nladdr.nl_family = AF_NETLINK;
@@ -323,22 +335,25 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
 
     iov.iov_base = &buf;
 
+    int errors = 0;
     do {
         iov.iov_len = sizeof(buf);
         len = recvmsg(nl->sock, &msg, 0);
 
-        if(len < 0 && (errno == EAGAIN || errno == EINTR)) {
-            int rc;
-            rc = wait_for_fd(0, nl->sock, 100);
-            if(rc <= 0) {
-                if(rc == 0)
-                    errno = EAGAIN;
-            } else {
-                len = recvmsg(nl->sock, &msg, 0);
-            }
-        }
+    if(len < 0) {
+	    errors++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case ENOBUFS:
+	    case ENOMEM:
+	    case EAGAIN: sched_yield(); continue; // fixme, wait for fd again
+	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
+			    continue;
+	    }
+    }
+     while(len < 0 && errors < 5);
 
-        if(len < 0) {
+    if(len < 0) {
             perror("netlink_read: recvmsg()");
             return -1;
         } else if(len == 0) {
@@ -364,7 +379,8 @@ netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
             if(!answer)
                 done = 1;
             if(nl_ignore && nh->nlmsg_pid == nl_ignore->sockaddr.nl_pid) {
-                kdebugf("(ignore), ");
+                fprintf(stderr,"Message from self - we should not see this more than twice - ever\n");
+		kdebugf("(ignore), ");
                 continue;
             } else if(answer && (nh->nlmsg_pid != nl->sockaddr.nl_pid ||
                                  nh->nlmsg_seq != nl->seqno)) {
@@ -441,16 +457,48 @@ netlink_talk(struct nlmsghdr *nh)
     kdebugf("Sending seqno %d from address %p (talk)\n",
             nl_command.seqno, &nl_command.seqno);
 
-    rc = sendmsg(nl_command.sock, &msg, 0);
-    if(rc < 0 && (errno == EAGAIN || errno == EINTR)) {
-        rc = wait_for_fd(1, nl_command.sock, 100);
-        if(rc <= 0) {
-            if(rc == 0)
-                errno = EAGAIN;
-        } else {
-            rc = sendmsg(nl_command.sock, &msg, 0);
-        }
+    int errors = 0;
+
+// formerly: 100ms timeout on kernel handling, setup of a select loop
+// Not a bad idea - the blocking context switch from the select
+// better accomplishes what I'm trying to do with yield - it's just
+// that the 100ms timeout bothers me and something else may have gone
+// Wrong elsewhere.
+//        rc = wait_for_fd(1, nl_command.sock, 100);
+    do {
+    rc = sendmsg(nl_command.sock, &msg, MSG_DONTWAIT);
+    if(rc < 0) {
+	    errors++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case EAGAIN: sched_yield();
+                         rc = wait_for_fd(1, nl_command.sock, 5);
+		    if( rc <=0 ) {
+			    if(rc == 0) continue;
+			    errors = 5;
+		    }
+		    continue; break; // hmm. When we overflow we get the rc from the waitfor
+	    // This could possibly be a temporary error:
+	    case ENETDOWN:
+	    // Interface probably went down and flushed for us. It won't be
+	    // be back any time soon:
+	    case ESRCH:
+	    // Pre-existing route (or a failure to update in time in
+	    // the kernel) that trying harder to add won't help.
+	    case EEXIST: errors = 5; break;
+	    default: fprintf(stderr,"EEEIEEE - got a netlink message %d we don't handle!\n", errno);
+			    continue;
+	    }
     }
+    } while(rc < 0 && errors < 5);
+
+    //   FIXME: what if we get 0? Should never happen right? Well, 0 is now possible from
+    // the above and may have been possible before
+
+    if(rc == 0)fprintf(stderr, "netlink_talk returned 0!?\n");
+
+// FIXME: There is a netlink bug I'm trying to track down involving the errno
+//  sometimes getting wedged into the return message.
 
     if(rc < nh->nlmsg_len) {
         int saved_errno = errno;
@@ -459,10 +507,14 @@ netlink_talk(struct nlmsghdr *nh)
         return -1;
     }
 
-    rc = netlink_read(&nl_command, NULL, 1, NULL); /* ACK */
+// FIXME: Can this get out of sync?? I didn't manage to write it, so why should
+// I read it?
+
+    rc = netlink_read(&nl_command, NULL, 1, NULL); /* FIXME: Do more robust checking of the ACK */
 
     return rc;
 }
+
 
 static int
 netlink_send_dump(int type, void *data, int len) {
@@ -508,6 +560,8 @@ netlink_send_dump(int type, void *data, int len) {
 
     kdebugf("Sending seqno %d from address %p (dump)\n",
             nl_command.seqno, &nl_command.seqno);
+
+    // FIXME - no decent error checking here
 
     rc = sendmsg(nl_command.sock, &msg, 0);
     if(rc < buf.nh.nlmsg_len) {
@@ -596,6 +650,40 @@ rtnlgrp_to_mask(unsigned int grp)
     return grp ? 1 << (grp - 1) : 0;
 }
 
+#define array_size(ar) (sizeof(ar) / sizeof(ar[0]))
+/* Filter out messages from self that occur on listener socket,
+   caused by our actions on the command socket
+ */
+
+static void netlink_install_filter (int sock, __u32 pid)
+{
+  struct sock_filter filter[] = {
+    /* 0: ldh [4]                 */
+    BPF_STMT(BPF_LD|BPF_ABS|BPF_H, offsetof(struct nlmsghdr, nlmsg_type)),
+    /* 1: jeq 0x18 jt 3 jf 6  */
+    BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, htons(RTM_NEWROUTE), 1, 0),
+    /* 2: jeq 0x19 jt 3 jf 6  */
+    BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, htons(RTM_DELROUTE), 0, 3),
+    /* 3: ldw [12]                */
+    BPF_STMT(BPF_LD|BPF_ABS|BPF_W, offsetof(struct nlmsghdr, nlmsg_pid)),
+    /* 4: jeq XX  jt 5 jf 6   */
+    BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, htonl(pid), 0, 1),
+    /* 5: ret 0    (skip)     */
+    BPF_STMT(BPF_RET|BPF_K, 0),
+    /* 6: ret 0xffff (keep)   */
+    BPF_STMT(BPF_RET|BPF_K, 0xffff),
+  };
+
+  struct sock_fprog prog = {
+    .len = array_size(filter),
+    .filter = filter,
+  };
+
+  if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_FILTER, &prog, sizeof(prog)) < 0)
+      fprintf(stderr,"Can't install socket filter for some reason - will see messages from self: %s\n",
+	      strerror(errno));
+}
+
 int
 kernel_setup_socket(int setup)
 {
@@ -618,6 +706,7 @@ kernel_setup_socket(int setup)
             return -1;
         }
 
+	netlink_install_filter(nl_listen.sock,getpid());
         kernel_socket = nl_listen.sock;
 
         return 1;
@@ -916,6 +1005,29 @@ kernel_has_ipv6_subtrees(void)
     return (kernel_older_than("Linux", 3, 11) == 0);
 }
 
+/*
+void print_failed_netlink(char *s, int operation, int table, int metric, int dev, int via,
+		char *dest, int plen, char *src, int src_plen, int ifindex, char * gate) {
+
+        fprintf(stderr,"failed kernel_route %s %s from %s "
+            "table %d metric %d dev %s via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex(ifindex), format_address(gate));
+	}
+}
+*/
+
+// The way this gets called is confusing
+// "newgate" is only used on a change or replace
+// otherwise add/del uses the first parameters only
+
+const int iflo = 0; // fixme find this
+
+#if 0
+#error don't build this'
 int
 kernel_route(int operation, int table,
              const unsigned char *dest, unsigned short plen,
@@ -924,7 +1036,7 @@ kernel_route(int operation, int table,
              const unsigned char *newgate, int newifindex,
              unsigned int newmetric, int newtable)
 {
-    union { char raw[1024]; struct nlmsghdr nh; } buf;
+    union { char raw[4096]; struct nlmsghdr nh; } buf;
     struct rtmsg *rtm;
     struct rtattr *rta;
     int len = sizeof(buf.raw);
@@ -963,7 +1075,7 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
+        if(newmetric == metric && v6_equal(newgate, gate) &&
            newifindex == ifindex)
             return 0;
         /* It would be better to add the new route before removing the
@@ -972,18 +1084,50 @@ kernel_route(int operation, int table,
            silently fail the request, causing "stuck" routes.  Let's
            stick with the naive approach, and hope that the window is
            small enough to be negligible. */
-        kernel_route(ROUTE_FLUSH, table, dest, plen,
+
+        // FIXME if the interface went down there is no
+	// route to flush because the kernel did it for us
+	// A way to deal with this is always have two or more
+	// routes installed in the kernel
+
+        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
                      NULL, 0, 0, 0);
+
+// this is tarting to get tedious if(!if_indextoname(route->ifindex, ifname))
+
+	if(rc < 0) {
+        perror("flush failed during replace");
+        fprintf(stderr,"failed kernel_route %s during replace: %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	}
         rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
                           src, src_plen,
                           newgate, newifindex, newmetric,
                           NULL, 0, 0, 0);
         if(rc < 0) {
-            if(errno == EEXIST)
+         fprintf(stderr,"failed kernel_route add during replace: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	    perror("Add failed during replace");
+		if(errno == EEXIST)
                 rc = 1;
-            /* Should we try to re-install the flushed route on failure?
+		// FIXME hmm. Way more errors than this are possible
+/*		else rc = kernel_route(ROUTE_ADD, table, dest, plen,
+                     src, src_plen,
+                     gate, ifindex, metric,
+                     NULL, 0, 0, 0); */
+            /* Try to re-install the flushed route on failure.
                Error handling is hard. */
         }
         return rc;
@@ -994,16 +1138,24 @@ kernel_route(int operation, int table,
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
 
     kdebugf("kernel_route: %s %s from %s "
-            "table %d metric %d dev %d nexthop %s\n",
+            "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" : "???",
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
     /* Unreachable default routes cause all sort of weird interactions;
-       ignore them. */
-    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96)))
-        return 0;
+       where do they come from? */
+
+    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96))) {
+    fprintf(stderr,"unreachable kernel_route: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	    return 0;
+    }
 
     memset(buf.raw, 0, sizeof(buf.raw));
     if(operation == ROUTE_ADD) {
@@ -1017,24 +1169,37 @@ kernel_route(int operation, int table,
     rtm = NLMSG_DATA(&buf.nh);
     rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
     rtm->rtm_dst_len = ipv4 ? plen - 96 : plen;
-    if(use_src)
-        rtm->rtm_src_len = src_plen;
-    rtm->rtm_table = table;
+
+    if(use_src) {
+	    if(ipv4) fprintf(stderr,"BAD: ipv4 using src: %d ????\n", src_plen - 96);
+	    rtm->rtm_src_len = ipv4 ? src_plen - 96 : src_plen;
+    }
+	    rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;
+
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
         rtm->rtm_type = RTN_UNREACHABLE;
     rtm->rtm_protocol = RTPROT_BABEL;
+    // I am not sure why we need ONLINK
     rtm->rtm_flags |= RTNH_F_ONLINK;
 
     rta = RTM_RTA(rtm);
+
+// strongly implies a netlink bug
 
     if(ipv4) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
+        if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_SRC;
+            memcpy(RTA_DATA(rta), src + 12, sizeof(struct in_addr));
+        }
     } else {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
@@ -1046,6 +1211,201 @@ kernel_route(int operation, int table,
             rta->rta_type = RTA_SRC;
             memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
         }
+    }
+
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
+        }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
+    }
+
+    buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
+
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
+
+    rc = netlink_talk(&buf.nh);
+
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
+    if(metric < KERNEL_INFINITY && rtm->rtm_type != RTN_UNICAST )
+		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
+    if(metric >= KERNEL_INFINITY && rtm->rtm_type != RTN_UNREACHABLE )
+		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
+
+    if(rc != 0) {
+	    fprintf(stderr,"failed kernel_route: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+	    if(operation == ROUTE_MODIFY) {
+	    fprintf(stderr,"failed kernel_change: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            newtable, newmetric, newifindex, format_address(newgate));
+	    }
+    }
+    return rc;
+
+}
+
+// Work in progress
+#endif
+
+#if 1
+
+int
+kernel_route(int operation, int table,
+             const unsigned char *dest, unsigned short plen,
+             const unsigned char *src, unsigned short src_plen,
+             const unsigned char *gate, int ifindex, unsigned int metric,
+             const unsigned char *newgate, int newifindex,
+             unsigned int newmetric, int newtable)
+{
+    union { char raw[1024]; struct nlmsghdr nh; } buf;
+    struct rtmsg *rtm;
+    struct rtattr *rta;
+    int len = sizeof(buf.raw);
+    int rc, ipv4, use_src = 0;
+    // const int expires = 6000;
+
+    if(!nl_setup) {
+        fprintf(stderr,"kernel_route: netlink not initialized.\n");
+        errno = EIO;
+        return -1;
+    }
+
+    /* if the socket has been closed after an IO error, */
+    /* we try to re-open it. */
+    if(nl_command.sock < 0) {
+        rc = netlink_socket(&nl_command, 0);
+        if(rc < 0) {
+            int olderrno = errno;
+            perror("kernel_route: netlink_socket()");
+            errno = olderrno;
+            return -1;
+        }
+    }
+
+    /* Check that the protocol family is consistent. */
+    if(plen >= 96 && v4mapped(dest)) {
+        if(!v4mapped(gate) ||
+           (src_plen > 0 && (!v4mapped(src) || src_plen < 96))) {
+            errno = EINVAL;
+            return -1;
+        }
+    } else {
+        if(v4mapped(gate)|| (src_plen > 0 && v4mapped(src))) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+
+    if(operation == ROUTE_MODIFY) {
+	    // clear out the old route
+	    // Going from infinite to normal
+	    // going from normal to infinite
+	    if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
+	             rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
+                     src, src_plen,
+                     gate, ifindex, metric,
+                     NULL, 0, 0, 0);
+                     if(rc!=0) fprintf(stderr,"Flushing infinite route failed\n");
+	    }
+	table = newtable;
+	gate = newgate;
+	ifindex = newifindex;
+	metric = newmetric;
+    }
+    ipv4 = v4mapped(gate);
+    use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
+
+    kdebugf("kernel_route: %s %s from %s "
+            "table %d metric %d dev %d via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" : 
+	    operation == ROUTE_MODIFY ? "modify" : "???",
+            format_prefix(dest, plen), format_prefix(src, src_plen),
+            table, metric, ifindex, format_address(gate));
+
+    /* Unreachable default routes cause all sort of weird interactions;
+       ignore them. */
+
+    if((metric >= KERNEL_INFINITY) &&
+	    (plen == 0 || (ipv4 && plen == 96)))
+        return 0;
+
+    memset(buf.raw, 0, sizeof(buf.raw));
+
+    if(operation == ROUTE_FLUSH) {
+	    buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE; // NLM_EXCL?
+        buf.nh.nlmsg_type = RTM_DELROUTE;
+//	ifindex = 0;
+    } else {
+        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
+        buf.nh.nlmsg_type = RTM_NEWROUTE;
+    }
+
+    rtm = NLMSG_DATA(&buf.nh);
+    rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
+    rtm->rtm_dst_len = ipv4 ? plen - 96 : plen;
+    if(use_src)
+        rtm->rtm_src_len = src_plen;
+    rtm->rtm_table = table;
+    rtm->rtm_scope = RT_SCOPE_UNIVERSE; // FIXME: NOT SURE ABOUT THIS
+    if(metric < KERNEL_INFINITY)
+        rtm->rtm_type = RTN_UNICAST;
+    else
+        rtm->rtm_type = RTN_UNREACHABLE;
+
+    rtm->rtm_protocol = RTPROT_BABEL;
+    rtm->rtm_flags |= RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
+
+    rta = RTM_RTA(rtm);
+
+    if(ipv4) {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
+    } else {
+        if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_SRC;
+            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
+        }
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
     }
 
     rta = RTA_NEXT(rta, len);
@@ -1073,10 +1433,55 @@ kernel_route(int operation, int table,
     } else {
         *(int*)RTA_DATA(rta) = -1;
     }
-    buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
-    return netlink_talk(&buf.nh);
+//    PERHAPS one day push babel routes as expiring into the
+//    the kernel and periodically refresh them. This would
+//    give us a window to crash or restart in without retractions
+//    and also let us chew up compute. On the other hand, we 
+//    end up writing stuff to the kernel more often to refresh it.
+
+#ifdef HAVE_EXPIRES
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_EXPIRES;
+    memcpy(RTA_DATA(rta), &expires, sizeof(int));
+#endif
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
+        }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
+    }
+
+    buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
+
+    rc = netlink_talk(&buf.nh);
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
+    return rc;
 }
+#endif
 
 static int
 parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
@@ -1122,6 +1527,11 @@ parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
         case RTA_TABLE:
             table = *(int*)RTA_DATA(rta);
             break;
+#ifdef HAVE_EXPIRES
+        case RTA_EXPIRES:
+		route->expires = *(int*)RTA_DATA(rta);
+            break;
+#endif
         default:
             break;
         }
@@ -1526,7 +1936,7 @@ kernel_callback(struct kernel_filter *filter)
 int
 add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
 {
-    char buffer[64] = {0}; /* 56 needed */
+    char buffer[128] = {0}; /* 56 needed */
     struct nlmsghdr *message_header = (void*)buffer;
     struct rtmsg *message = NULL;
     struct rtattr *current_attribute = NULL;
@@ -1598,7 +2008,7 @@ add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
 int
 flush_rule(int prio, int family)
 {
-    char buffer[64] = {0}; /* 36 needed */
+    char buffer[128] = {0}; /* 36 needed */
     struct nlmsghdr *message_header = (void*)buffer;
     struct rtmsg *message = NULL;
     struct rtattr *current_attribute = NULL;

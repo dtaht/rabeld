@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <signal.h>
 
 #ifdef __linux
 /* Defining it rather than including <linux/rtnetlink.h> because this
@@ -273,8 +274,9 @@ getnet(int c, unsigned char **p_r, unsigned char *plen_r, int *af_r,
     char *t;
     unsigned char *ip;
     unsigned char addr[16];
-    unsigned char plen;
-    int af, rc;
+    unsigned char plen = 255;
+    int af = 0;
+    int rc;
 
     c = getword(c, &t, gnc, closure);
     if(c < -1)
@@ -925,6 +927,47 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
 
 }
 
+static int parse_dump_commands(int c, char *token, gnc_t gnc, void *closure,
+                  int *action_return, const char **message_return)
+{
+    c = skip_whitespace(c, gnc, closure);
+    if(c < 0 || c == '\n' || c == '#')
+        return skip_to_eol(c, gnc, closure);
+
+    c = getword(c, &token, gnc, closure);
+    if(c < -1)
+        return c;
+
+    if(strcmp(token, "neighbours") == 0) {
+        c = skip_eol(c, gnc, closure);
+        if(c < -1 || !action_return)
+            goto fail;
+        *action_return = CONFIG_ACTION_DUMP_NEIGHBOURS;
+    } else if(strcmp(token, "routes") == 0) {
+        c = skip_eol(c, gnc, closure);
+        if(c < -1 || !action_return)
+            goto fail;
+        *action_return = CONFIG_ACTION_DUMP_ROUTES;
+    } else if(strcmp(token, "interfaces") == 0) {
+        c = skip_eol(c, gnc, closure);
+        if(c < -1 || !action_return)
+            goto fail;
+        *action_return = CONFIG_ACTION_DUMP_INTERFACES;
+    } else if(strcmp(token, "me") == 0) {
+        c = skip_eol(c, gnc, closure);
+        if(c < -1 || !action_return)
+            goto fail;
+        *action_return = CONFIG_ACTION_DUMP_ME;
+     } // else do something;
+
+  free(token);
+  return c;
+
+ fail:
+    free(token);
+    return -2;
+}
+
 static int
 parse_config_line(int c, gnc_t gnc, void *closure,
                   int *action_return, const char **message_return)
@@ -1213,7 +1256,7 @@ filter_match(struct filter *f, const unsigned char *id,
             return 0;
     }
     if(f->neigh) {
-        if(!neigh || memcmp(f->neigh, neigh, 16) != 0)
+        if(!neigh || v6_equal(f->neigh, neigh))
             return 0;
     }
     if(f->ifname) {

@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_KERNEL
+#define _BABEL_KERNEL
 #include <netinet/in.h>
 #include "babeld.h"
 
@@ -27,14 +28,19 @@ THE SOFTWARE.
 
 struct kernel_route {
     unsigned char prefix[16];
-    int plen;
     unsigned char src_prefix[16];
-    int src_plen; /* no source prefix <=> src_plen == 0 */
+    unsigned char gw[16];
+    unsigned char plen; // FIXME: why were these ints?
+    unsigned char src_plen; /* no source prefix <=> src_plen == 0 */
+    unsigned char proto; // This is an unsigned char in the real world
+	// But we use -2 to indicate we have an internal route: which conflicts with gated/aggr
+	// So we could go back to a short here - if I wasn't so puzzled about why we
+	// keep having routes end up being static.
+    unsigned char pad;
     int metric;
     unsigned int ifindex;
-    int proto;
-    unsigned char gw[16];
-};
+    int expires;
+}; // Yea! these are now aligned this on 16 byte boundaries
 
 struct kernel_addr {
     struct in6_addr addr;
@@ -46,9 +52,9 @@ struct kernel_link {
 };
 
 struct kernel_rule {
+    unsigned char src[16];
     unsigned int priority;
     unsigned int table;
-    unsigned char src[16];
     unsigned char src_plen;
 };
 
@@ -109,3 +115,4 @@ int add_rule(int prio, const unsigned char *src_prefix, int src_plen,
 int flush_rule(int prio, int family);
 int change_rule(int new_prio, int old_prio, const unsigned char *src, int plen,
                 int table);
+#endif

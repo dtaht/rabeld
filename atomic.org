@@ -1,0 +1,2977 @@
+* Anyway, I really, really, really don't want to poke into the chip's wifi
+
+Totally burnt on kernel development. However poking into wpa_supplicant seems
+now on the agenda. Maybe with better error handling it can stop being the
+problem.
+
+* SIOCGSTAMP
+Return a struct timeval with the receive timestamp of the last packet passed to
+the user. This is useful for accurate round trip time measurements. See
+setitimer(2) for a description of struct timeval. This ioctl should only be used
+if the socket option SO_TIMESTAMP is not set on the socket. Otherwise, it
+returns the timestamp of the last packet that was received while SO_TIMESTAMP
+was not set, or it fails if no such packet has been received, (i.e., ioctl(2)
+returns -1 with errno set to ENOENT).
+
+* Signals - any other signals we are not trapping?
+
+When writing onto a connection-oriented socket that has been shut down (by the
+local or the remote end) SIGPIPE is sent to the writing process and EPIPE is
+returned. The signal is not sent when the write call specified the MSG_NOSIGNAL
+flag. When requested with the FIOSETOWN fcntl(2) or SIOCSPGRP ioctl(2), SIGIO is
+sent when an I/O event occurs. It is possible to use poll(2) or select(2) in the
+signal handler to find out which socket the event occurred on. An alternative
+(in Linux 2.2) is to set a real-time signal using the F_SETSIG fcntl(2); the
+handler of the real time signal will be called with the file descriptor in the
+si_fd field of its siginfo_t. See fcntl(2) for more information.
+
+Under some circumstances (e.g., multiple processes accessing a single socket),
+the condition that caused the SIGIO may have already disappeared when the
+process reacts to the signal. If this happens, the process should wait again
+because Linux will resend the signal later.
+
+* SO_SNDTIMEEO
+I had no idea this socket existed
+https://linux.die.net/man/7/socket
+
+SO_SNDTIMEO
+
+Specify the receiving or sending timeouts until reporting an error. The argument
+is a struct timeval. If an input or output function blocks for this period of
+time, and data has been sent or received, the return value of that function will
+be the amount of data transferred; if no data has been transferred and the
+timeout has been reached then -1 is returned with errno set to EAGAIN or
+EWOULDBLOCK, or EINPROGRESS (for connect(2)) just as if the socket was specified
+to be nonblocking. If the timeout is set to zero (the default) then the
+operation will never timeout. Timeouts only have effect for system calls that
+perform socket I/O (e.g., read(2), recvmsg(2), send(2), sendmsg(2)); timeouts
+have no effect for select(2), poll(2), epoll_wait(2), and so on.
+
+While I'm looking these over - we'd added these to tcp, maybe they also work
+with udp for send now?
+
+SO_RCVLOWAT and SO_SNDLOWAT
+Specify the minimum number of bytes in the buffer until the socket layer will
+pass the data to the protocol (SO_SNDLOWAT) or the user on receiving
+(SO_RCVLOWAT). These two values are initialized to 1. SO_SNDLOWAT is not
+changeable on Linux (setsockopt(2) fails with the error ENOPROTOOPT).
+SO_RCVLOWAT is changeable only since Linux 2.4. The select(2) and poll(2) system
+calls currently do not respect the SO_RCVLOWAT setting on Linux, and mark a
+socket readable when even a single byte of data is available. A subsequent read
+from the socket will block until SO_RCVLOWAT bytes are available.
+
+* Babel's log is this every few seconds
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+even bringing the usb device "up" doesn't help
+no packets are getting out any interface, from any daemon
+restarting babel clears it - for the usb device. 
+The wifi driver remains wedged. 
+
+root@chip-1:/home/log# ps aux | grep wlan0
+root       360  0.0  0.3   5352  1964 ?        Ss   Feb22   0:00 /sbin/wpa_supplicant -s -B -P /run/wpa_supplicant.wlan0.pid -i wlan0 -D nl80211,wext -c /etc/wpa_supplicant.conf -C /run/wpa_supplicant
+root       409  0.0  1.1   7776  5728 ?        Ss   Feb22   0:00 /sbin/dhclient.orig -cf /etc/dhcp/dhclient.conf -v -pf /run/dhclient.wlan0.pid -lf /var/lib/dhcp/dhclient.wlan0.leases wlan0
+root     29329  0.0  0.0   1712    84 ?        Ss   15:59   0:00 /usr/sbin/babeld -D -I /var/run/babeld.pid -L /home/log/babel.log -G 33123 -l -S /var/lib/babeld/state wlan0 usb0
+root     29370  0.0  0.1   2080   504 ttyGS0   S+   16:02   0:00 grep wlan0
+
+root@chip-1:/home/log# ifconfig wlan0
+wlan0     Link encap:Ethernet  HWaddr 38:a2:8c:5d:f9:e5  
+          inet6 addr: fe80::3aa2:8cff:fe5d:f9e5/64 Scope:Link
+          inet6 addr: fd32:7d58:8d63:0:3aa2:8cff:fe5d:f9e5/64 Scope:Global
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1762708 errors:0 dropped:137426 overruns:0 frame:0
+          TX packets:1110315 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:2617842694 (2.4 GiB)  TX bytes:170330346 (162.4 MiB)
+
+ok
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add neighbour 3c118 address fe80::80d0:6dff:fe69:bd3b if usb0 reach ffff rxcost 96 txcost 96 rtt 0.764 rttcost 0 cost 96
+add xroute fd99::61/128-::/0 prefix fd99::61/128 from ::/0 metric 128 expires 0
+
+** Maybe when an interface is wedged we can call IPV6_LEAVE_GROUP
+Maybe all the other daemons are also experiencing the same error and retrying
+madly.
+** Leftover routes
+So, wifi is not getting any data. Why are this routes still going to wifi?
+
+root@chip-1:/home/log# ip -6 route
+local ::1 dev lo proto kernel metric 256  pref medium
+2601:646:4101:a740::/60 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fc02:b738:e988:1::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:2::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:3::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:4::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:5::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:6::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:7::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:8::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:9::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:a::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:b::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:c::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:d::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:e::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:f::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988:10::/64 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988::/56 via fe80::16cc:20ff:fee5:64c1 dev wlan0 proto babel metric 1024  pref medium
+fc02:b738:e988::/48 via fe80::7ec7:9ff:fede:2bb5 dev wlan0 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/64 dev wlan0 proto kernel metric 256  pref medium
+fd32:7d58:8d63::/48 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd55::/64 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd69:3860:b137::/48 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::3 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::4 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::10 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+unreachable fd99::61 dev lo proto 44 metric 128  error -101 pref medium
+fd99::65 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fd99::66 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::80d0:6dff:fe69:bd3b dev usb0 proto babel metric 1024  pref medium
+fe80::/64 dev usb0 proto kernel metric 256  pref medium
+fe80::/64 dev wlan0 proto kernel metric 256  pref medium
+*** Although I like my random method
+I should really try to register these in dns somewhere so I 
+know where they come from.
+** I kill off dhclient - no effect
+** I kill off wpa_supplicant - ifconfig wlan0 hangs
+and babel hangs too - can't even get to it via the telnet interface
+The box drops off the net... can't even get back in via screen
+*** I guess I really need to fix the poweroff button or a hang check
+
+* Weird
+
+Feb 23 06:41:45 chip-1 ntpd[621]: Listen normally on 18 babel0 fe80::f837:2bff:fe36:13de UDP 123
+Feb 23 06:41:45 chip-1 ntpd[621]: Deleting interface #17 babel0, fe80::c43d:feff:fefe:63e3#123, interface stats: received=0, sent=0, dropped=0, active_time=600 secs
+Feb 23 06:41:45 chip-1 ntpd[621]: peers refreshed
+Feb 23 06:41:59 chip-1 dhclient: DHCPREQUEST on wlan0 to 172.26.201.1 port 67
+Feb 23 06:41:59 chip-1 dhclient: DHCPACK from 172.26.201.1
+Feb 23 06:42:00 chip-1 dhclient: bound to 172.26.201.127 -- renewal in 5498 seconds.
+
+* I ran it overnight with flent stress tests
+and with inserting and deleting routes.
+
+2 chips stopped getting mcast entirely (eventually) - and dropped off the net
+
+Ironically that was the one furthest away, but why did the other (chip-6)
+survive and not the others? Both are on wifi...
+
+4GB of packet captures. 16GB stick. 8TB raid array is at the yurtlab.
+
+Also, now that I'm sensitive to unsigned char - see the -?
+root@chip-1:~# nc ::1 33123
+BABEL 1.0
+version babeld-1.7.1-220-g217fb62-dirty
+host chip-1
+my-id 3a:a2:8c:ff:fe:5d:f9:e5
+ok
+dump
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add xroute 172.26.96.61/32-::/0 prefix 172.26.96.61/32 from ::/0 metric 128 expires 0
+add xroute fd99::61/128-::/0 prefix fd99::61/128 from ::/0 metric 128 expires 0
+ok
+
+
+** TODO ip monitor | routing_table_evolution
+babelweb does this graphically
+
+* Reverted the malloc patch
+
+Restarted it on the pi3. Life is better now. Abusing it still.
+
+DOES NOT EXPLAIN expires nonzero still, even if it is more rare.
+Compiled without neon too.
+
+root@pi3:~/git/rabeld/tests/routing_table_of_death# echo dump | nc ::1 33123 | grep xroute | grep -v 'expires 0'
+add xroute fc70:5089:84ed:18::/64-::/0 prefix fc70:5089:84ed:18::/64 from ::/0 metric 0 expires -4016846
+add xroute fc70:5089:84ed:19::/64-::/0 prefix fc70:5089:84ed:19::/64 from ::/0 metric 0 expires -65536
+
+** Maybe points at the proto unsigned char change or the plen change
+
+That could overwrite the plen and src_plen
+
+Even then I aligned the darn thing to a cacheline...
+
+** TODO [P1] BUT - it is considered to be a signed value in kernel_netlink!
+oh, that's subtle. Was that always the case?
+
+STILL think it is netlink. Long past time for valgrind.
+But This is always true for example...
+
+    if(route->src_plen >= 0) {
+        if(!inet_ntop(AF_INET6, route->src_prefix,
+                      src_addr_prefix, sizeof(src_addr_prefix))) {
+            kdebugf("Couldn't format kernel route for printing.");
+            return;
+        }
+
+And here it's now an int
+
+add_rule(int prio, const unsigned char *src_prefix, int src_plen, int table)
+
+And here:
+
+int add_xroute(unsigned char prefix[16], unsigned char plen,
+xroute.h:               unsigned char src_prefix[16], unsigned char src_plen,
+
+util.h:int martian_prefix(const unsigned char *prefix, int plen) ATTRIBUTE ((pure));
+util.h:int set_src_prefix(unsigned char *src_addr, unsigned char *src_plen);
+util.h:// v4 = plen >= 96 && v4mapped(prefix);
+
+message.c:    normalize_prefix(p_r, prefix, plen < 0 ? 128 : ae == 1 ? plen + 96 : plen);
+
+struct xroute {
+    unsigned char prefix[16];
+    unsigned char src_prefix[16];
+    unsigned char plen;    // FIXME plen is unsigned char here
+    unsigned char src_plen;
+    unsigned short metric; // FIXME metric is a short here?
+    unsigned int ifindex;
+    int expires;
+    unsigned char proto;
+} CACHELINE_ALIGN;
+
+
+* These are left over from somewhere on apu2
+
+adding babel to flush all it's routes might be good -
+both on start and stop
+
+Or it could be 64bit biting me.
+
+* The mips box has some GREAT stuff from the pi3
+
+medium
+fd99::10 from a028:9900:cc00::/42 via fe80::ba27:ebff:fec9:3c08 dev br-lan  prot
+o babel  metric 1024  pref medium
+fd99::10 from e417:a100::/25 via fe80::ba27:ebff:fec9:3c08 dev br-lan  proto bab
+el  metric 1024  pref medium
+
+
+* The mips boxes take a long time (running stock babel)
+to clear their backlogged route caches.
+
+Idea - Opportunistic garbage collection somewhere as we walk big tables, see if
+we can expire them. Maybe this aready exists...
+
+Guess I need to build this for mips now.
+
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+pdsh> 
+pdsh> 
+pdsh> ip -6 route show | wc -l
+gw2: 4076
+chip-6: 35
+chip-4: 38
+chip-1: 35
+par: 4087
+apu: 51
+gw3: 27
+gw4: 2539
+chip-5: 229
+gw1: 3087
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+pdsh> ip -6 route show | wc -l
+gw2: 2892
+chip-6: 35
+par: 2493
+chip-1: 35
+apu: 51
+chip-5: 36
+gw3: 27
+gw4: 2027
+gw1: 2283
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+chip-4: 38
+
+
+* TODO if we run out of space writing the log file
+
+close it, delete it, start over. Forgot I was logging so heavily on lede
+
+Also just switch to syslog in general
+
+
+* disabling the neon code first
+
+This box is also compiled for -Os and -g
+
+All boxes on this run ended up -Os and -g
+rebuilding chip-1
+** Recompiled without neon, still has bad xroutes.
+:whew:
+
+hit it with 4k routes this time... wiped out the network pretty good.
+
+Route_stream is the bottleneck with Os and neo
+min_conflict O3 neon.
+
+* lscpu
+
+helpful. Never knew that existed.
+
+* TODO expires random elsewhere
+
+Pretty sure that's just me not using initialized memory anymore.
+
+I note that "expires" was in there in part to try to find a memory write...
+
+add xroute fd55::/64-::/0 prefix fd55::/64 from ::/0 metric 0 expires -1694434440
+add xroute fd99::3/128-::/0 prefix fd99::3/128 from ::/0 metric 0 expires -65536
+
+
+* TODO dump "used to exit" on end of file
+
+It isn't now.... Probably my bug
+
+root@chip-1:~# echo dump | nc ::1 33123 | grep -v 'expires 0'
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host chip-1
+my-id 3a:a2:8c:ff:fe:5d:f9:e5
+ok
+add interface wlan0 up true ipv6 fe80::3aa2:8cff:fe5d:f9e5 ipv4 172.26.201.127
+add interface usb0 up true ipv6 fe80::7892:43ff:fe83:1af1 ipv4 172.26.96.61
+add neighbour ea858 address fe80::3aa2:8cff:fe5d:effb if wlan0 reach fff9 rxcost 256 txcost 346 rtt 241.520 rttcost 2048 cost 2394
+add neighbour 34478 address fe80::3aa2:8cff:fe5d:d369 if wlan0 reach fdff rxcost 260 txcost 344 rtt 220.110 rttcost 2048 cost 2397
+add neighbour 35d90 address fe80::16cc:20ff:fee5:64c1 if wlan0 reach ffff rxcost 256 txcost 256 rtt 89.622 rttcost 1525 cost 1781
+add neighbour 33a08 address fe80::221:63ff:fe2f:f2f4 if wlan0 reach ffff rxcost 256 txcost 256 rtt 209.427 rttcost 2048 cost 2304
+add neighbour 32128 address fe80::7ec7:9ff:fede:2bb5 if wlan0 reach ffff rxcost 256 txcost 262 rtt 265.876 rttcost 2048 cost 2310
+ok
+
+dump
+
+
+* TODO Maybe if I don't have a src specific addr I don't write
+it, assuming calloc does the job for me?
+
+* expires non-zero - this is a clue
+And I also killed calloc. And am probably not zeroing expires. That said...
+scribbling on memory somewhere... 
+
+root@pi3:~# telnet ::1 33123
+Trying ::1...
+Connected to ::1.
+Escape character is '^]'.
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host pi3
+my-id ba:27:eb:ff:fe:c9:3c:08
+ok
+dump
+add interface eth0 up true ipv6 fe80::ba27:ebff:fec9:3c08 ipv4 172.26.16.4
+add interface eth1 up false
+add interface wlan1 up false
+add interface wlan0 up false
+add interface wlan2 up false
+add neighbour 37c988 address fe80::32b5:c2ff:fe75:7faa if eth0 reach ffff rxcost 96 txcost 256 rtt 0.785 rttcost 0 cost 256
+add neighbour 37e318 address fe80::20d:b9ff:fe41:6c2d if eth0 reach ffff rxcost 96 txcost 96 rtt 1.374 rttcost 0 cost 96
+add neighbour 37a128 address fe80::eea8:6bff:fefe:9a2 if eth0 reach ffff rxcost 96 txcost 96 rtt 0.615 rttcost 0 cost 96
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+add route 37ce50 prefix ::/0 from 2601:646:4101:a740::/60 installed yes id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c730 prefix ::/0 from 2601:646:4101:a740::/60 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 352 refmetric 256 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cc58 prefix 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c3b0 prefix 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cca0 prefix 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c440 prefix 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d1a8 prefix 0.0.0.0/0 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e1b0 prefix 0.0.0.0/0 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cf70 prefix 0.0.0.0/0 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 320 refmetric 64 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37d090 prefix 172.26.16.0/24 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37bfe8 prefix 172.26.16.0/24 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cee0 prefix 172.26.16.0/24 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37caa0 prefix 172.26.20.0/22 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c310 prefix 172.26.20.0/22 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cbc8 prefix 172.26.64.0/24 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c0a0 prefix 172.26.64.0/24 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37dcd0 prefix 172.26.96.61/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:f9:e5 metric 488 refmetric 392 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dbdb0 prefix 172.26.96.61/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:f9:e5 metric 612 refmetric 516 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37cdc0 prefix 172.26.96.64/32 from ::/0 installed yes id 7e:c7:09:ff:fe:de:2b:b5 metric 480 refmetric 224 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37de10 prefix 172.26.96.64/32 from ::/0 installed no id 7e:c7:09:ff:fe:de:2b:b5 metric 486 refmetric 390 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dd290 prefix 172.26.96.65/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:ef:fb metric 444 refmetric 348 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d130 prefix 172.26.96.65/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:ef:fb metric 456 refmetric 360 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d9c0 prefix 172.26.96.66/32 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:d3:69 metric 480 refmetric 384 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d770 prefix 172.26.96.66/32 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:d3:69 metric 580 refmetric 484 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37ca48 prefix 172.26.96.100/32 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c260 prefix 172.26.96.100/32 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cb50 prefix 172.26.96.103/32 from ::/0 installed yes id ba:27:eb:ff:fe:87:21:77 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37df50 prefix 172.26.96.103/32 from ::/0 installed no id ba:27:eb:ff:fe:87:21:77 metric 609 refmetric 513 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cc10 prefix 172.26.130.0/23 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 96 refmetric 0 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c140 prefix 172.26.130.0/23 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 192 refmetric 96 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cd30 prefix 172.26.200.0/22 from ::/0 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 320 refmetric 224 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c5f0 prefix 172.26.200.0/22 from ::/0 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 416 refmetric 320 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d048 prefix 198.27.232.0/22 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e120 prefix 198.27.232.0/22 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37ce08 prefix 2601:646:4101:a740::/60 from ::/0 installed yes id 32:b5:c2:ff:fe:75:7f:ab metric 256 refmetric 0 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37c6a0 prefix 2601:646:4101:a740::/60 from ::/0 installed no id 32:b5:c2:ff:fe:75:7f:ab metric 352 refmetric 256 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cfb8 prefix 2602:24c:61be:8210::/60 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e000 prefix 2602:24c:61be:8210::/60 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37cce8 prefix fd32:7d58:8d63::/48 from ::/0 installed yes id 16:cc:20:ff:fe:e5:64:c3 metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37c518 prefix fd32:7d58:8d63::/48 from ::/0 installed no id 16:cc:20:ff:fe:e5:64:c3 metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37e2d0 prefix fd55::/64 from ::/0 installed yes id ee:a8:6b:ff:fe:fe:09:a2 metric 96 refmetric 0 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37c9f0 prefix fd69:3860:b137::/48 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37d878 prefix fd69:3860:b137::/48 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 610 refmetric 514 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37e240 prefix fd99::3/128 from ::/0 installed yes id ee:a8:6b:ff:fe:fe:09:a2 metric 96 refmetric 0 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37caf8 prefix fd99::4/128 from ::/0 installed yes id ba:27:eb:ff:fe:87:21:77 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37dec0 prefix fd99::4/128 from ::/0 installed no id ba:27:eb:ff:fe:87:21:77 metric 609 refmetric 513 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37c4d0 prefix fd99::61/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:f9:e5 metric 488 refmetric 392 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d7c8 prefix fd99::61/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:f9:e5 metric 612 refmetric 516 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37cd78 prefix fd99::64/128 from ::/0 installed yes id 7e:c7:09:ff:fe:de:2b:b5 metric 480 refmetric 224 via fe80::32b5:c2ff:fe75:7faa expires 0 if eth0
+add route 37dd80 prefix fd99::64/128 from ::/0 installed no id 7e:c7:09:ff:fe:de:2b:b5 metric 486 refmetric 390 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 3dd248 prefix fd99::65/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:ef:fb metric 444 refmetric 348 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d0d8 prefix fd99::65/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:ef:fb metric 456 refmetric 360 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d920 prefix fd99::66/128 from ::/0 installed yes id 3a:a2:8c:ff:fe:5d:d3:69 metric 480 refmetric 384 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+add route 37d718 prefix fd99::66/128 from ::/0 installed no id 3a:a2:8c:ff:fe:5d:d3:69 metric 580 refmetric 484 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37d000 prefix fde8:9cb6:b42e::/60 from ::/0 installed yes id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eth0
+add route 37e090 prefix fde8:9cb6:b42e::/60 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 288 refmetric 192 via fe80::eea8:6bff:fefe:9a2 expires 0 if eth0
+ok
+
+ok
+quit
+Connection closed by foreign host.
+root@pi3:~# vi /tmp/babel.log 
+root@pi3:~# ps aux | grep babel
+root     21961  0.2  0.2   2760  2228 ?        Ss   00:09   0:14 /usr/sbin/babeld -D -I /var/run/babeld.pid -z3 -L /home/log/babel.log -G 33123 -c /etc/babeld.conf -S /var/lib/babeld/state eth0 eth1 wlan0 wlan1 wlan2
+root     28225  0.0  0.2   4280  2008 pts/1    S+   01:46   0:00 grep babel
+root@pi3:~# echo dump | nc  ::1 33123 | grep xroute 
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+
+* Need ipv6 checksums enabled
+
+Perhaps it's at the source. Or at the dest.
+
+Gotta find my original pi3 bug report.
+
+ium
+fd99::10 from 4437:3f00:7037:3f00::/56 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from ec36:3f00:1837:3f00::/56 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+
+
+root@pi3:~# 
+root@pi3:~# ethtool eth0
+Settings for eth0:
+	Supported ports: [ TP MII ]
+	Supported link modes:   10baseT/Half 10baseT/Full 
+	                        100baseT/Half 100baseT/Full 
+	Supported pause frame use: No
+	Supports auto-negotiation: Yes
+	Advertised link modes:  10baseT/Half 10baseT/Full 
+	                        100baseT/Half 100baseT/Full 
+	Advertised pause frame use: Symmetric Receive-only
+	Advertised auto-negotiation: Yes
+	Link partner advertised link modes:  10baseT/Half 10baseT/Full 
+	                                     100baseT/Half 100baseT/Full 
+	Link partner advertised pause frame use: No
+	Link partner advertised auto-negotiation: Yes
+	Speed: 100Mb/s
+	Duplex: Full
+	Port: MII
+	PHYAD: 1
+	Transceiver: internal
+	Auto-negotiation: on
+	Supports Wake-on: pumbag
+	Wake-on: d
+	Current message level: 0x00000007 (7)
+			       drv probe link
+	Link detected: yes
+root@pi3:~# 
+root@pi3:~# telnet ::1 33123
+Trying ::1...
+Connected to ::1.
+Escape character is '^]'.
+BABEL 1.0
+version babeld-1.7.1-219-gba21fc0
+host pi3
+my-id ba:27:eb:ff:fe:c9:3c:08
+ok
+dump
+add interface eth0 up true ipv6 fe80::ba27:ebff:fec9:3c08 ipv4 172.26.16.4
+add interface eth1 up false
+add interface wlan1 up false
+add interface wlan0 up false
+add interface wlan2 up false
+add neighbour 37c988 address fe80::32b5:c2ff:fe75:7faa if eth0 reach ffff rxcost 96 txcost 256 rtt 0.785 rttcost 0 cost 256
+add neighbour 37e318 address fe80::20d:b9ff:fe41:6c2d if eth0 reach ffff rxcost 96 txcost 96 rtt 1.374 rttcost 0 cost 96
+add neighbour 37a128 address fe80::eea8:6bff:fefe:9a2 if eth0 reach ffff rxcost 96 txcost 96 rtt 0.615 rttcost 0 cost 96
+add xroute fd99::10/128-7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 prefix fd99::10/128 from 7ec7:9ff:fede:2bb5:4000:89bb:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 3662616
+add xroute fd99::10/128-1800:0:8103:0:e6:3700:a078:3800/0 prefix fd99::10/128 from 1800:0:8103:0:e6:3700:a078:3800/0 metric 0 expires 6356991
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/0 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/0 metric 0 expires 0
+add xroute fd99::10/128-::20d:b9ff:fe41:6c2d:7da7:f00/180 prefix fd99::10/128 from ::20d:b9ff:fe41:6c2d:7da7:f00/180 metric 0 expires 0
+add xroute fd99::10/128-::10:0:0:5104:0/201 prefix fd99::10/128 from ::10:0:0:5104:0/201 metric 0 expires 0
+add xroute fd99::10/128-44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 prefix fd99::10/128 from 44c7:e976:20ee:3c00:8000:0:ba27:ebff/0 metric 0 expires 4082992
+add xroute fd99::10/128-d800:0:4800:0:fcf2:530f:f4c8:126/0 prefix fd99::10/128 from d800:0:4800:0:fcf2:530f:f4c8:126/0 metric 0 expires 0
+add xroute fd99::10/128-::4000:8cff:20d:b9ff/0 prefix fd99::10/128 from ::4000:8cff:20d:b9ff/0 metric 0 expires 1025311
+add xroute fd99::10/128-c0bb:3c00:a8b4:3d00::/180 prefix fd99::10/128 from c0bb:3c00:a8b4:3d00::/180 metric 0 expires 3945616
+add xroute fd99::10/128-eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 prefix fd99::10/128 from eea8:6bff:fefe:9a2:4000:cc30:ffff:0/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:409a:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:409a:3a00::/0 metric 0 expires -7560646
+add xroute fd99::10/128-4800:0:1000:0:4805:3e00:4c5:e976/0 prefix fd99::10/128 from 4800:0:1000:0:4805:3e00:4c5:e976/0 metric 0 expires -1576403202
+add xroute fd99::10/128-::5104:0:44c7:e976:20ee:3c00/0 prefix fd99::10/128 from ::5104:0:44c7:e976:20ee:3c00/0 metric 0 expires 0
+add xroute fd99::10/128-d4a7:f00:0:100:98c0:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:98c0:3a00::/0 metric 0 expires -1489960896
+add xroute fd99::10/128-3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:f9e5:4000:5038:ffff:0/0 metric 0 expires -7560646
+add xroute fd99::10/128-::d06d:3d00:4c5:e976/255 prefix fd99::10/128 from ::d06d:3d00:4c5:e976/255 metric 0 expires 0
+add xroute fd99::10/128-20d5:3d00:4c5:e976::6101:0/213 prefix fd99::10/128 from 20d5:3d00:4c5:e976::6101:0/213 metric 0 expires 0
+add xroute fd99::10/128-ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 prefix fd99::10/128 from ec36:3f00:1837:3f00:4437:3f00:7037:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 prefix fd99::10/128 from 4437:3f00:7037:3f00:9c37:3f00:c837:3f00/56 metric 0 expires 0
+add xroute fd99::10/128-1cae:f00:0:100:20b9:3a00::/0 prefix fd99::10/128 from 1cae:f00:0:100:20b9:3a00::/0 metric 0 expires 0
+add xroute fd99::10/128-26ae:f00:0:100:3876:3900::/0 prefix fd99::10/128 from 26ae:f00:0:100:3876:3900::/0 metric 0 expires 16000
+add xroute fd99::10/128-::4900:0:c8ba:3900:c075:3e00/0 prefix fd99::10/128 from ::4900:0:c8ba:3900:c075:3e00/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+
+
+* I have seen the pi3 do weird things when having power issues
+But I have a good power supply in it now... but there are
+two (unused) wifi usb sticks in it....
+
+The pi3 WAS my new best friend.
+
+Could still be my code. Or perhaps I've found the netlink bug I'm still looking for
+
+I swear! I swear! I saw netlink prepend a null to an address for no good reason.
+Once.
+
+* Awesome - can't parse packet
+** Logs from elsewhere
+Martian Prefix 127.0.0.1/32
+Martian Prefix ::1/128
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:effb
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:f9e5
+Late hello: bufferbloated neighbor fe80::3aa2:8cff:fe5d:effb
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 35) from fe80::ba27:ebff:fec9:3c08 on eno1.
+Couldn't parse packet (13, 44) from fe80::ba27:ebff:fec9:3c08 on eno1.
+*** syslog
+
+Feb 23 01:01:29 pi3 systemd[1]: Starting Session c54 of user root.
+Feb 23 01:01:29 pi3 systemd[1]: Started Session c54 of user root.
+Feb 23 01:02:10 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:04:50 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:04:50 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:06:20 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:05:35 pi3 systemd[1]: Starting Session c55 of user root.
+Feb 23 01:05:35 pi3 systemd[1]: Started Session c55 of user root.
+Feb 23 01:06:56 pi3 dhcpcd[728]: babel0: dhcp if_readrawpacket: Network is down
+Feb 23 01:06:56 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:08:26 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:06:56 pi3 dhcpcd[728]: babel0: removing interface
+Feb 23 01:10:28 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+Feb 23 01:10:28 pi3 rsyslogd-2007: action 'action 17' suspended, next retry is Thu Feb 23 01:11:58 2017 [try http://www.rsyslog.com/e/2007 ]
+Feb 23 01:11:10 pi3 ntpd[836]: Deleting interface #23 babel0, fe80::ac2a:53ff:fe6b:ebd5#123, interface stats: received=0, sent=0, dropped=0, active_time=600 secs
+Feb 23 01:11:10 pi3 ntpd[836]: peers refreshed
+Feb 23 01:11:28 pi3 dhcpcd[728]: eth0: Router Advertisement from fe80::32b5:c2ff:fe75:7faa
+
+
+
+* fd99::10 is in there 10 times
+
+I fear this is a new bug, introduced by one of my changes. The pi3 is the only
+one doing this.... which btw wasn't running the latest code until recently.
+
+It doesn't even have the latest iproute2 on it - and the expires test wasn't
+running on it either. When importing it I have a refemtric of 0.
+
+add xroute fd99::10/128-::/0 prefix fd99::10/128 from ::/0 metric 0 expires 0
+add xroute fd99::10/128-::8000:0:120d:7fff/26 prefix fd99::10/128 from ::8000:0:120d:7fff/26 metric 0 expires 0
+add xroute fd99::10/128-::8000:9ff7:120d:7fff/26 prefix fd99::10/128 from ::8000:9ff7:120d:7fff/26 metric 0 expires 0
+add xroute fd99::10/128-70d3:3700:78f0:3700::2100:0/211 prefix fd99::10/128 from 70d3:3700:78f0:3700::2100:0/211 metric 0 expires 0
+add xroute fd99::10/128-3aa2:8cff:fe5d:d369:fc2d:8773:610d:0/0 prefix fd99::10/128 from 3aa2:8cff:fe5d:d369:fc2d:8773:610d:0/0 metric 0 expires 0
+add xroute fd99::10/128-4822:3e00:7422:3e00:a022:3e00:cc22:3e00/35 prefix fd99::10/128 from 4822:3e00:7422:3e00:a022:3e00:cc22:3e00/35 metric 0 expires 0
+add xroute fd99::10/128-900a:3e00:bc0a:3e00:e80a:3e00:140b:3e00/11 prefix fd99::10/128 from 900a:3e00:bc0a:3e00:e80a:3e00:140b:3e00/11 metric 0 expires 0
+add xroute fd99::10/128-e80a:3e00:140b:3e00:400b:3e00:6c0b:3e00/12 prefix fd99::10/128 from e80a:3e00:140b:3e00:400b:3e00:6c0b:3e00/12 metric 0 expires 0
+add xroute fd99::10/128-::211c:0:7029:3e00:4c5:e976/0 prefix fd99::10/128 from ::211c:0:7029:3e00:4c5:e976/0 metric 0 expires 16000
+add xroute fd99::10/128-d4a7:f00:0:100:b0b1:3a00::/0 prefix fd99::10/128 from d4a7:f00:0:100:b0b1:3a00::/0 metric 0 expires 0
+
+@dancer:~/abuse$ ip -6 route | grep fd99::10
+
+fd99::10 from 4822:3e00:6000::/35 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from 9000::/11 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 from e800::/12 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+
+
+** TODO revert that box to babeld
+** DONE ip -6 addr add fd99::10
+
+Added it back in... running the current babeld
+
+# For more information about this configuration file, refer to
+# babeld(8)
+default enable-timestamps true
+default max-rtt-penalty 2048
+ipv6-subtrees true
+# eth1 is attached to a bridged wifi/wired network
+interface eth0 wired true link-quality false
+interface eth1 wired true link-quality true
+# All these adhoc interfaces suck compared to others on the network
+# and right now, all on 6
+diversity 3
+interface wlan1 channel 6 wired false
+interface wlan0 channel 6 wired false
+interface wlan2 channel 6 wired false
+out if wlan1 metric 1024
+out if wlan0 metric 1024
+out if wlan2 metric 1024
+#I wanted to get hncp mesh addresses only (so as to be able to do ss
+#routing
+redistribute ip fd99::10/128 eq 128 allow
+redistribute proto 44 allow
+redistribute proto 43 allow
+redistribute proto 8 allow
+redistribute local deny
+# but ended up going with this for now
+~                                        
+* and I love watching stats lie
+in abuse:
+
+Started Flent 1.0.1-git-af2d06e using Python 3.5.2.
+Starting tcp_upload test. Expected run time: 310 seconds.
+Data file written to ./tcp_upload-2017-02-22T160821.747032.route_flaps_away.flent.gz.
+Summary of tcp_upload test run 'route_flaps_away' (at 2017-02-23 00:08:21.747032):
+
+                                    avg       median          # data pts
+ Ping (ms) ICMP          :        18.38        16.72 ms             1551
+ TCP upload              :        12.92         9.61 Mbits/s        1500
+ TCP upload::tcp_cwnd    :       126.16       123.00                1502
+ TCP upload::tcp_rtt     :        17.40        16.71                1503
+ TCP upload::tcp_rtt_var :         3.57         3.18                1503
+d@dancer:~/abuse$ flent -H 172.26.96.64 -t route_flaps_away --socket-stats -l 300 tcp_download
+Started Flent 1.0.1-git-af2d06e using Python 3.5.2.
+Starting tcp_download test. Expected run time: 310 seconds.
+Data file written to ./tcp_download-2017-02-22T161433.108957.route_flaps_away.flent.gz.
+Summary of tcp_download test run 'route_flaps_away' (at 2017-02-23 00:14:33.108957):
+
+                           avg       median          # data pts
+ Ping (ms) ICMP :       127.15       110.07 ms             1550
+ TCP download   :        15.99        16.58 Mbits/s        1500
+
+
+* Are the martians coming from the wire?
+
+From the kernel?
+
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix ::1/128
+chip-5: Martian Prefix fe80::/64
+chip-5: Martian Prefix 127.0.0.1/32
+chip-5: Martian Prefix ::1/128
+
+
+chip-1: Martian Prefix ::1/128
+chip-1: Martian Prefix fe80::/64
+chip-1: Martian Prefix fe80::/64
+chip-1: Martian Prefix 127.0.0.1/32
+chip-1: Martian Prefix ::1/128
+
+
+
+
+* And now we have, like, this 5 phase commit
+
+I am bufferbloating the link now
+
+172.26.20.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted 172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.96.103 proto babel metric 4294967295 onlink 
+Deleted unreachable 172.26.96.103 proto babel metric 4294967295 onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+Deleted unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+fd99::4 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+
+
+* And I just showed that expires does not work on the chips at all!
+
+root@chip-1:~# ip -6 route add fcf2:4444::/64 dev babel0 expires 30
+
+They are kernel 4.4.x
+
+So my test... doesn't work. Or I have to build a modern iproute that I didn't
+before. Nope. I'm running the latest iproute. So I flush ip -6 route flush proto gated
+
+Of course, now when I do that, I end with both unreachable routes again
+
+fcf2:530f:f4c8:6::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:6::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:7::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:7::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:8::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:8::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:9::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:9::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:a::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:a::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:b::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:b::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:c::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:c::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+fcf2:530f:f4c8:d::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fcf2:530f:f4c8:d::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+
+There must be some other subtly I'm missing. 
+
+* I'm watching one chip being very unstable
+I'm on the same wifi link - so that's a stronger metric
+vs ethernet - apu2 - router - usb0 (or wifi) to - chip
+** TODO Get timestamps to work on logs
+172.26.96.64 via 172.26.16.1 dev eno1 proto babel onlink 
+fd99::64 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+** Hmm... lets run fixusb
+
+traceroute to 172.26.96.64 (172.26.96.64), 30 hops max, 60 byte packets
+ 1  172.26.16.1 (172.26.16.1)  0.355 ms  0.243 ms  0.347 ms
+ 2  172.26.96.64 (172.26.96.64)  1.334 ms
+
+So the actual path is really confused... I'm getting that to 16.1. Which I am
+one hop from. 
+
+I am still doing weird stuff with addresses via protos for fixed things
+and maybe lacking correct base metrics.
+ 
+* So now most of the chips don't have a default ipv6 route
+not sure if that matters - they shouldn't have one if they don't have a valid
+ipv6 address...
+
+but they should be getting that from ra??
+
+and they use rules here so that's where their default goes...
+
+pdsh> ip -6 route | grep default
+gw3: ssh: connect to host gw3 port 22: Network is unreachable
+pdsh@dancer: gw3: ssh exited with exit code 255
+gw2: default from 2601:646:4101:a740::/60 via fe80::20d:b9ff:fe41:6c2c dev br-lan  proto babel  metric 1024  pref medium
+par: default via fe80::c256:27ff:fe6c:953f dev eth0 proto babel metric 1024  pref medium
+apu: default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev enp3s0  proto babel  metric 1024  pref medium
+gw4: default from 2601:646:4101:a740::/60 via fe80::221:63ff:fe2f:f2f4 dev wlan0  proto babel  metric 1024  pref medium
+pdsh@dancer: chip-1: ssh exited with exit code 1
+gw1: default from 2001:558:6045:bd:7073:30a8:87fc:c299 via fe80::201:5cff:fe63:e446 dev eth0  proto static  metric 512  pref medium
+gw1: default from 2601:646:4101:a740::/60 via fe80::201:5cff:fe63:e446 dev eth0  proto static  metric 512  pref medium
+pdsh@dancer: chip-6: ssh exited with exit code 1
+pdsh@dancer: chip-5: ssh exited with exit code 1
+pdsh@dancer: chip-4: ssh exited with exit code 1
+pi3: ssh: connect to host pi3 port 22: Connection timed out
+pdsh@dancer: pi3: ssh exited with exit code 255
+
+
+* So a righter behavior is to first flush the infinite route
+And that seems to work. The two metrics can co-exist otherwise.
+
+I will never understand why on first startup babel tends to choose the worst
+route first.
+
+* Nope
+
+
+root@dancer:~/git/rabeld# ip route
+default via 172.26.201.1 dev wlp2s0 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel metric 4294967295 onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.61 proto babel metric 4294967295 onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.64 proto babel metric 4294967295 onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.65 proto babel metric 4294967295 onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel metric 4294967295 onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel metric 4294967295 onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel metric 4294967295 onlink 
+
+
+unreachable fcf2:530f:f4c8:f::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8:10::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8::/56 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fcf2:530f:f4c8::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::61 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::65 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 4294967295  error -113 pref medium
+
+** This first route that goes unreach is this one 
+which is a route assigned by dhcp I think
+
+default via 172.26.201.157 dev wlp2s0 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.200.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+
+** So if I reboot everything
+
+d@dancer:~/git/rabeld$ ip route
+default via 172.26.16.5 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel metric 4294967295 onlink 
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.61 proto babel metric 4294967295 onlink 
+172.26.96.64 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.96.64 proto babel metric 4294967295 onlink 
+172.26.96.65 via 172.26.201.186 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+** So this does nothing when I am stuck in this state
+
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+root@dancer:~/git/rabeld# ip route replace 172.26.96.66/32 via 172.26.201.194 dev wlp2s0 proto babel
+
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel 
+172.26.96.66 via 172.26.201.194 dev wlp2s0 proto babel metric 1024 onlink 
+unreachable 172.26.96.66 proto babel metric 4294967295 onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+root@dancer:~/git/rabeld# ip route replace 172.26.96.66/32 via 172.26.201.194 dev wlp2s0 proto babel metric 1024 onlink
+
+
+* So I can finally make atomic updates work
+Armed with all this info.
+Let's try.
+
+And it seems to work.
+
+I think we get into this fight with network manager because we were using exclu
+if we don't use exclu we override the other routes installed on the system that
+we are now managing and we take back control of things like the default route.
+
+Which is usually what you want. Unless you want to have route X metric Y from
+somewhere else. Have to think about it. I can see another daemon doing a route
+replace and expecting it to be their route again - much like the losing battle
+with network manager....
+
+* asdf
+
+root@dancer:~/git/rabeld# 
+root@dancer:~/git/rabeld# babeld eno1
+Not sure why this is back - needs to get flushed?
+Can't install socket filter: Invalid argument
+Type: 0
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+kernel_route(ADD): File exists
+failed kernel_route: flush 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+flush failed during replace: No such process
+failed kernel_route modify during replace: 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.5
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
+Table 254 vs other stuff?
+
+
+* On going unreachable
+the proto stays the same. The dev reports to
+become lo. but if I just specify theproto
+it works
+ 
+
+root@dancer:~/cs6# ip -6 route replace unreachable fd53::/64 proto 99 root@dancer:~/cs6# ip -6 route replace fd53::/64 dev eno1 proto 99 
+root@dancer:~/cs6# ip -6 route replace unreachable fd53::/64 proto 99 
+root@dancer:~/cs6# ip -6 route replace fd53::/64 dev eno1 proto 99 
+
+* wtf
+Deleted local fd32:7d58:8d63:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fe80:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+Could still be the parallela acting up.
+/me walks away
+
+Nope.
+
+** TODO Need to add 1 real address to the machines
+acting up, so I can find out which one it is.
+
+** You can't add unreachable routes that expire
+
+root@dancer:~/git/rabeld/tests/routing_table_of_death# ip -6 route | grep fd88
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+root@dancer:~/git/rabeld/tests/routing_table_of_death# ip -6 route | grep fd88
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+
+The expire doesn't make it into it.
+
+When you create a new interface,
+in this case dummy
+
+ff00::/8 dev babel0 table local metric 256  pref medium
+fe80::/64 dev babel0 proto kernel metric 256  pref medium
+local fe80::7872:e9ff:fe80:df17 dev lo table local proto unspec metric 0  pref medium
+local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+The derived interface for it gets entered above
+in the local table.... for ff
+kerel table for fe80
+local table for the fe80:xxxx
+fe80:: for the table local
+
+fe80::7872:e9ff:fe80:df17/64
+
+local fe80:: dev lo table local proto unspec metric 0  pref medium
+
+** ip -6 addr add fd87::1/64 dev babel0 preferred_lft 30 valid_lft 30
+
+fd87::/64 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+local fd87:: dev lo table local proto unspec metric 0  pref medium
+
+and when it expires we get:
+
+Deleted local fd87:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::/64 dev babel0 proto kernel metric 256  expires -6sec pref medium
+
+** ip -6 addr add fd87::1/64 dev babel0 preferred_lft 30 valid_lft 30 noprefixroute
+
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+local fd87:: dev lo table local proto unspec metric 0  pref medium
+
+Deleted local fd87:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+
+**  ip -6 addr add fd87::1/128 dev babel0 preferred_lft 30 valid_lft 30 noprefixroute
+
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+
+** ip -6 addr add fd87::1/128 dev babel0 preferred_lft 30 valid_lft 30
+
+Takes a while for the last message to show up
+
+fd87::1 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::1 dev babel0 proto kernel metric 256  expires -7sec pref medium
+
+** Expiring unreachable routes don't expire
+either an iproute2 bug or kernel bug
+** And lookie here: a NULL in the output!
+Is it from netlink? iproute?
+ip -6 route add fd87::/64 dev babel0 expires 30
+
+^@fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -10sec pref medium
+
+I did it again and it did not have that null
+
+could it have been me typin that? 
+
+Can't reproduce... is this the mysterious
+thing the openvswitch folk were dealing with?
+
+fd87::1 dev babel0 proto kernel metric 256  expires 30sec pref medium
+local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted local fd87::1 dev lo table local proto unspec metric 0  pref medium
+Deleted fd87::1 dev babel0 proto kernel metric 256  expires -7sec pref medium
+^@fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -10sec pref medium
+fd87::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd86::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd85::/64 dev babel0 metric 1024  expires 30sec pref medium
+fd84::/64 dev babel0 metric 1024  expires 30sec pref medium
+Deleted fd86::/64 dev babel0 metric 1024  expires -1sec pref medium
+Deleted fd87::/64 dev babel0 metric 1024  expires -29sec pref medium
+** ip -6 route replace fd85::/64 dev babel0 expires 30
+
+** ip -6 route replace fd85::1/128 dev babel0 expires 30
+no table mentioned in the message
+fd85::1 dev babel0 metric 1024  expires 30sec pref medium
+
+I specify a table or a proto and that shows up.
+
+But I do not see a table unless I give it one
+to start with nor a proto unless I give it one to start with
+
+IF I give it a table 0, it doesn't show up either
+so we assume it's table 0
+
+table local shows up as table local
+
+table unspec does not appear in ip monitor
+
+both table 254 and 0 report no table
+
+(I could have messed this up in babel, too, but)
+
+table default is 253 - which, ugh I made babel be
+table 0 and table 254 report the same tthing
+
+proto 255 reports nothing
+
+254: gated/aggr
+3: reports no proto either 
+4: reports static
+
+42: If I insert an expiring route into 
+babel's table, will it see it?
+
+* Reminder to self
+
+Don't just stop babeld and leave it stopped.
+You can't get back in to anything
+
+Anyway, killing them all expired all the routes
+being rebroadcast from box to box.
+
+Gotta fix dns so I can get back in more easily.
+
+* NO! routes that expire are not seen.
+
+This may explain a LOT. As the kernel dbs are now out of sunc
+
+I really hate watching the delete add go by in
+ip -6 monitor route. Really hate it. Gotta go fix that
+finally...
+
+* a route flush proto 8
+does the right thing
+
+But does an expires?
+
+And I left the pi3 out of it this time.
+
+* TODO fixusb on the apu2
+
+is the way to get those usb devices back up
+need to fire that when the darn things come
+back up automagically
+
+Let's try the next test without the pi3
+* TODO
+Get external name service finally back up
+ip monitor | my script
+* Crashed the pi3
+I guess I was due.
+
+And the routes persist....
+I shut down the chips I could still get to...
+Which did expire their routes...
+
+I see fd99::10/128 a bunch of times. which is the 
+unreachable pi3.... - over ipv6. over ipv4 it is fine
+
+Now that box has a very custom babeld.conf file...
+and an old setup.
+
+Anyway, I shut it down, and I don't know if 
+it was co-incidence/timing or not, but the extra
+routes went away.
+
+all on the same 
+
+routerid db would be HELPFUL
+
+* killall is missing on the chips
+
+* Anyway, in the bufferbloated world
+all the routes stay there. for a very long time.
+They don't expire. Don't think it's the new filter.
+Could be a thinko on my part...
+
+1500 routes with no known source... except bufferbloat
+
+They no longer exist in the kernel tables as proto 8.
+Could they be so backed up that even restarting babeld
+won't fix it?
+Do I have a metric wrong? Is there an expires 
+different than a non-expires when signalling the kernel?
+
+* The biggest most expensive thing in consider-route
+is the comparison moving things from neon to normal regs
+and it's not that much of cpu - 6% as I write
+but 50% of the trace
+and the comparison in min_conflicts but not the neon
+part.
+
+Still... fixing the memcmp routine to be neon would be good
+
+* fix more boxes 
+** Fix the c2
+** Fix the pi2
+** Rebuild chip-5
+** Fix the c1 
+** reflash a few more lede boxes
+** Rebuild the parallel kernels
+** Get the other wifi interfaces on the pi3 up
+** Get logging better
+** make babelweb be smaller on screen
+** Automate multicast parsing .cap files
+** Short circuit compute bound problems
+** Determine paths of tests
+** Dynamically increase hello interval or
+** Break dependence on route updates to the hello interval
+** Find any other sources of martian_prefixes
+** Profile code again under this load
+** Have babelweb turn addresses into names
+** Fix dns while I'm at it
+** Add parsing for usec for rtt metrics
+** Make sure expires is working for all boxes
+* TODO Try to pass the concept of "urgent" down the stack
+
+Although the mac80211 layer presently respects CS6 markings to give things
+priority, most of the drivers I've looked at just keep all that in their own
+queue, and at least some, ignore priority. That said, it would be nice when
+babel thinks a flush is urgent, for it to somehow tell the rest of its own stack
+and ultimately the wire, that it is, indeed, urgent. But urgent is a concept
+almost entirely internal to babel itself, and lost long before we get to
+babel_send.
+
+
+We could try to arbitrarily look for hellos and ihus, and write the packet
+header ourselves instead of setsockopt, or carry the notion of "urgent" further...
+
+ifp->buffered_IHU? - so I just leveraged the existing timestamping code
+to set the sockopt when needed. 
+
+And worse, for unicast, CS6 maps to the voice queue, which is a terrible idea,
+which is why I killed it, and want to kill it upstream as well.
+
+I should look into what the chip's do with it.
+
+And upstream mac80211 just added a qos_map facility....
+
+* TODO review this....
+
+Maybe I re-introduced a bug (tho I don't see it)
+
+commit e687a58f01f2f1bcc344d8f9bacdfa5954dcae69
+Author: Matthieu Boutier <boutier@pps.univ-paris-diderot.fr>
+Date:   Fri Apr 15 13:47:45 2016 +0200
+
+    Fix bug allowing the comparison of v4 and v6 prefixes.
+    
+    When the v6 prefix is ::/0, then it is considered as less specific than
+    any v4-mapped prefix.
+    
+    Remark that "no source prefix" is encoded by "src_plen == 0".  This
+    might be an issue, since "src_plen == 0" means ::/0, a v6 prefix.  So
+    the route (1.1.1.1/32 from 0.0.0.0/0) is internally represented by
+    (1.1.1.1/32 from ::/0).  When compared with  (::/0 from 2001:db8::/32),
+    the two source prefixes are comparable.  This is not a problem in
+    practice, since 2 pairs of prefixes are disjoint whether the dst
+    prefixes or the src prefixes are disjoint.
+
+
+* TODO IN6_IS macros
+
+There are some pretty efficient-looking macros for more IN6_stuff in the glib
+headers.
+
+I do think killing v4_mapped was the right thing, but looking at the macros for
+this in glib I am not so sure.
+
+* Killed another memcmp in prefix_cmp. Then un-killed it.
+
+Endianess bites. We need to actually apply the mask first to both before doing
+the compare... or... agh... reverted. Now I'm worrying about endianess
+elsewhere. I need to keep writing benchmarks to keep my head clear on this.
+
+
+** __builtin_bswap in gcc for registers
+
+http://stackoverflow.com/questions/33932038/fast-conversion-of-16-bit-big-endian-to-little-endian-in-arm
+
+** Reorder on load
+And we can actually do the reordering on the load itself in this case -
+this example is for 16 bits, but... agh
+
+void neon_Reorder16bit(const uint8_t * src, size_t size, uint8_t * dst)
+{
+  assert(size%16 == 0);
+  //uint16x8_t vld1q_u16 (const uint16_t *) 
+  //vrev64q_u16(uint16x8_t vec);
+  //void vst1q_u16 (uint16_t *, uint16x8_t) 
+  for (size_t i = 0; i < size; i += 16)
+    vst1q_u8(dst + i, vrev16q_u8(vld1q_u8(src + i)));
+}
+
+* lightbulb!
+
+I have a minimum of *16* 128 bit neon registers.
+
+With whole program optimization, I *think* - we never have to spill them.
+except for c library calls, maybe.
+We currently use a max of 4 + temp (sometimes)
+so we can store the v4_prefix along with a mask
+the fe80 prefix with a mask
+127.0.0.1/32 as v4mapped also with mask
+
+we call martian_prefix a LOT. Where do they come from? What is a martian?
+How can we squash them? Adding some logging to the mix all I see are:
+
+Martian Prefix fe80::/64
+Martian Prefix fe80::/64
+Martian Prefix 127.0.0.1/32
+Martian Prefix ::1/128
+
+But there used to be "a bug?" where we regected stuff to ::
+
+Hmm. I wonder if we can punt this sort of comparison to BPF.
+
+* Not a bubble...
+
+It's a "naive implementation of set difference", not a bubbly sort.
+
+I was merely trying to fix what ended up being triggered by NetworkManager in the
+end, and learning the codebase besides.
+
+* And...
+
+Network Manager I hope - and not babeld just did this... AGAIN.
+
+root@chip-5:~/rabeld/tests/routing_table_of_death# ip route | grep static
+default via 172.26.201.1 dev wlan0  proto static  metric 1024 
+172.26.16.0/24 via 172.26.201.244 dev wlan0  proto static 
+172.26.64.0/24 via 172.26.201.244 dev wlan0  proto static 
+172.26.130.0/23 via 172.26.201.244 dev wlan0  proto static 
+
+* DONE Fix /sbin/dhclient-script on the chip!
+always sets the defualt route! Overridding dhclient.conf
+
+* apt-get install netcat6
+
+* udhcp-script also insists on setting the default route
+
+** new udhcp script
+never install the default route directly
+save it to a file
+/tmp/udhcpc/interface
+monitoring daemon looks for files in that dir
+
+* TODO Leverage compute time as part of the jitter
+
+There is (probably) no need to install jitter when we are computing too hard or
+having bandwidth issues. 
+
+* TODO Create stubby nodes and use filtering better
+
+* TODO Create the vpn
+
+* TODO Create a and import the refmetric universally
+
+Since switching to using protos so heavily I totally missed on adding the metric
+(when put in by daemon X), or adding one when added by babel.
+
+The default suggested value is 128. I can put it in when I insert the route. Or
+always override it when installing into babel.
+
+** TODO Deal with source specific better
+
+
+* TODO Fix babel-pinger and udhcp
+
+I just lost my comcast gateway for no good reason again. Much puzzlement ensued.
+
+* And I want the route to come from udhcp and get put in the right place
+and do naming
+and so on
+
+* TODO Switch to RTT metrics universally
+
+OK, I'm satisfied that we can use the RTT metrics more fully.
+Bridged wifi typically has a min rtt of 128 to 250 - 
+Adhoc, much lower
+usb lower still
+the jitter around 100Mbit and 1Gbit is bothersome on ethernet
+What is a good value for max-rtt-penalty? 2048 seems like it would cover the
+diameter of my network
+and I want to use min-rtt of 100us which I can't do - 1ms...
+
+|Tech |Min-RTT|Max-RTT|
+|+++++|+++++++|+++++++|
+|wired,usb,wireless,bridged wireless|
+
+rtt-min needs to go to us to detect a gbit. Sure hope jules did that.
+rtt-max
+max
+
+** TODO Look into kathie's min-max filters from BBR and elsewhere
+These are major answers to the smoothing problems.
+
+** TODO look into txcost and rxcost
+I never have really understood the real purpose of these fixed parameters.
+In particular with split horizon I get 96/256 all the time.
+I LIKE split horizon...
+
+* DONE further optimize NEON for CSE <2017-02-20 Mon> 
+The compiler did not realize that it did not need to reload the src_prefix and
+prefix on every pass through the loop. 
+
+** TODO Perhaps I can fix this - const? 
+
+** TODO eliminate bubbly search in xroute [P1] 
+
+... and it turned out the real cause of this routine eating all the runtime was
+that xroute uses a naive set comparison! For a better test of route carrying
+capacity I can switch to injecting 500 routes from every rabeled box, rather
+than slamming in 10000 from one (which promptly gets in trouble due to this
+lookup).
+
+
+* TODO respond to late hellos sanely
+
+Finally - after all this optimization work - I'm close to making a logic change
+to babel.
+
+A late hello is really late! I mean 10s of seconds late.
+
+It implies we are seriously struggling but still connected. This router has
+gone suboptimal for cpu overload, overbuffering, or something else.
+
+And we *should not* ignore it - as babel does presently - because the node is
+still reachable, merely overloaded. Instead we should bump up the metric -
+possibly by a lot - to clear the overload and route around it. We should not
+disconnect that node merely because it is overloaded - nor should we ignore that
+we got that late hello.
+
+Hmm. Where to stick that logic...
+
+* TODO I made the route table more exponential but
+
+forgot it uses calloc, so it brings in all the memory which cannot then
+be discarded. I could revert to malloc here instead, or merely scale additional
+resizes to be less exponential... or go back to the previous method
+
+* DONE Ah. Unicast IHU is not compatable with timestamping.
+
+I forgot about that. Grump. Reverted for now - I really need RTT.
+
+* DONE Bug introduced with timestamping
+
+I don't get timestamps from the arms anymore.
+
+bisect needed
+
+It's really amazing I didn't break more than this along the way.
+
+* Coulnd't find this page
+
+The possible workaround is to open the Network settings, select the IPv6
+parameters page of your connection, click the Routes button and check "Ignore
+automatically obtained routes".
+
+* Idea
+
+redistribute proto X metric +128 stagger 6000 interval 600000
+
+Add +128 to the base metric for the interface. (is that what happens now)?
+stagger the announcements from this proto over 60 seconds, and don't
+expire them for 60 minutes.
+
+when you pull from the kernel dump table, randomize the first announcement
+by 0-60 of each route and do not announce it immediately. This will minimize
+the burst on the network (and also minimize future burps on announcing them,
+except when you are requested to do a route dump)
+
+Another method might be to "splay" routes across the interfaces, only announcing
+some each based on the bandwidth available to each interface.
+
+* TODO Now I need to figure out how to live without network manager
+
+kill it dead on the chips, desktop, and servers... while still keeping
+wifi working.
+
+* TODO So I killed networkmanager!
+
+and the all the unreachable routes and static routes went away.
+All the messages went away. It was network mangaer the whole time.
+
+Now we're down to bufferbloat killing things 
+- need to fix wifi multicast. add fq and drop head.
+- need to measure rtt and overlong ehellos when I have too much cpu
+- need to handle that route dump better overall
+- need to look at odhcpd and see what happens
+- like the expand the expiry idea for a *LOT* of reasons.
+- unicast route transfers
+Ah, well, writing the neon code was *fun*
+
+* TODO What is the right netmask and broadcast address?
+
+I'm perpetually having to explicitly export the local address in babeld.conf,
+and perhaps it's due to overhelpful mismanagement of the netmask by
+various drivers.
+
+root@pi2:~/rabeld# ifconfig wlan0
+172.26.96.104 netmask 255.255.255.255 root@pi2:~/rabeld# ifconfig wlan0 wlan0
+Link encap:Ethernet HWaddr 9c:ef:d5:ff:45:46 inet addr:172.26.96.104
+Bcast:172.26.255.255 Mask:255.255.0.0 inet6 addr: fe80::aa4c:801f:57dd:220e/64
+Scope:Link UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1 RX packets:33608
+errors:0 dropped:0 overruns:0 frame:0 TX packets:21603 errors:0 dropped:0
+overruns:0 carrier:0 collisions:0 txqueuelen:1000 RX bytes:49163303 (46.8 MiB)
+TX bytes:1966138 (1.8 MiB)
+
+* And one half of the bug turns out to be network manager
+
+My desktops and servers run network-manager but I thought - essentially
+disabled. 
+
+https://wiki.reseaulibre.ca/documentation/babel/
+https://bugzilla.gnome.org/show_bug.cgi?id=682616
+
+* And the pi3 (32bit) managed 11000 routes without a qualm
+
+with the new code. Hadn't tried it before with the older code, either, but it
+just motored along....
+
+It's only on ethernet. I think a core issue is the speed of updates over wifi.
+
+I do see it noticing getting late hellos.
+
+the chips fell over. I may well have a kernel bug on the x86. Sigh. Time to
+build net-next again.
+
+root@pi3:~# ip -6 route | grep babel | wc -l
+11925
+
+a struggling box has 1.6 of delay getting stuff out!!
+
+add neighbour 1e0f530 address fe80::32b5:c2ff:fe75:7faa if enp3s0 reach ffef rxcost 96 txcost 282 rtt 1843.822 rttcost 0 cost 282
+quit
+
+The pi3 is my new best friend. I think the chip
+is compiled for thumb
+
+   1303c:       f4642a8f        vld1.32 {d18-d19}, [r4]
+   13040:       f4630a8f        vld1.32 {d16-d17}, [r3]
+   13044:       f34201f0        veor    q8, q9, q8
+   13048:       f26101b0        vorr    d16, d17, d16
+   1304c:       f3600aa0        vpmax.u32       d16, d16, d16
+   13050:       ee103b90        vmov.32 r3, d16[0]
+
+
+* bla
+
+SO what I want to do is advertise increasingly a larger route update interval
+for all stuff based on the available bandwidth.
+
+As time allows - but always update my most local addresses and my
+source specific routes more frequently. 
+
+New compression format
+
+* TODO ask list about expires timers
+o  otherwise (i.e., if either the update is feasible or the entry is
+      not currently installed), then the entry's sequence number,
+      advertised metric, metric, and router-id are updated and, unless
+      the advertised metric is infinite, the route's expiry timer is
+      reset to a small multiple of the Interval value included in the
+      update.
+
+   When a route's expiry timer triggers, the behaviour depends on
+   whether the route's metric is finite.  If the metric is finite, it is
+   set to infinity and the expiry timer is reset.  If the metric is
+   already infinite, the route is flushed from the route table.
+
+I think there is a hole in the spec here in that what the "reflecting" routers
+should broadcast as their interval for updating the the expiry timer.
+
+* bound the work that babeld does with netlink
+
+And that looks hard, we are parsing a kernel_dump
+
+How about using ever bigger expiry timers to spread the future load?
+
+* Then other shit starts to fail
+
+hello timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+routeschanged timeout, do something!
+
+* Dunno
+
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+Warning: couldn't check exported routes.
+
+* Routes changed timeout!
+
+Also at one ppint
+
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 13) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 12) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 11) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+Couldn't parse packet (8, 10) from fe80::eea8:6bff:fefe:9a2 on enp3s0.
+
+* memcmp killage - for 8 byte
+  convert router_id to 8 byte natural type
+  roll 4 prefix compare routine
+  check that shift mask
+  measure total time to process
+
+* Comparison
+
+** x86 box running rabeld - 500 stuck unreachable routes
+** Arm running stock babeld - 0
+** Arm running rabeld 0
+** Mips box with babel 500
+
+A difference between these is
+that the mips box and the x86 are on the same link
+the two arms are on wifi.
+
+Hmm... could it be a size_t difference on time?
+or in netlink?
+
+* I keep hoping these will go away
+
+root@dancer:~/git/rabeld# ./babeld eno1 wlp2s0 -G 33123
+Type: 0
+Type: 2
+unreachable kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 2 via fe80::32b5:c2ff:fe75:7faa
+unreachable kernel_route: add 0.0.0.0/0 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+unreachable kernel_route: flush ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 2 via fe80::32b5:c2ff:fe75:7faa
+unreachable kernel_route: flush 0.0.0.0/0 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 65535 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
+failed kernel_route: flush 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+flush failed during replace: No such process
+failed kernel_route modify during replace: 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.5
+failed kernel_route add during replace: modify 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 via 172.26.16.1
+Add failed during replace: File exists
+
+* Corrected major thinko and logic error
+
+C false = 0
+  true = 1
+
+memcmp returns 0 if the two strings are equal.
+
+And elsewhere, we relied on memcmp's sorting behavior
+
+* Looking at the code
+
+when we move stuff to unreach appears to be a source of problems...
+sometimes... On both arm and 
+** doing stuff during a grace period?
+** Specifying the ifindex when that doesnt exist anymore?
+
+** Ideas
+*** push the failure to a retry queue
+
+*** Try to duplicate the failing behavior with iproute
+*** try to do the change atomically 
+Which is what I wanted to be doing anyway!
+*** use expire
+* And finally after all this work
+
+I finally got to where solving for bellman-ford showed up in the
+profile - still with 20% of cpu in memcmp, but the rest
+in min_conflict. 
+
+We need to periodically check within this routine if we've run
+out of time - and make sure we get a hello out so we don't
+fall off the net while computing too hard. We can announce
+increasd intervals too. 
+
+This is an end-game. This is what I wanted. Happy.
+
+* I should go back to 1.7.1 and 1.6 to see what happens.
+
+* A clue:
+
+The arm box, running rabeld - no unreachable routes
+the x86 has 6k. But none got made static
+the archer mips and a few others - 6k also running babeld
+
+On this arm box - still running network manager
+
+Feb 17 01:01:36 chip-4 NetworkManager[305]: <error> [1487293296.623445] [platform/nm-linux-platform.c:3814] event_handler(): Failed to retrieve incoming events: Out of memory (-5)
+Feb 17 01:02:33 chip-4 NetworkManager[305]: <error> [1487293353.121403] [platform/nm-linux-platform.c:3814] event_handler(): Failed to retrieve incoming events: Out of memory (-5)
+
+But I can't tell since I was dumb and didn't enable the local interface
+to see if it had tried to flush anything
+
+And, after running for ages, I end up with 103 routes ending up unreach and
+static on the x86 box
+
+I should break out valgrind.
+
+* Hmm. Maybe we have a type casting problem
+
+some places where the proto is unsigned char, others where it is an int,
+and many, many casts. This would explain why I didn't see it when I
+looked in the proto built up. Really need a netlink verifier.
+
+* gcc inline intrinsics
+
+http://hardwarebug.org/2010/07/06/arm-inline-asm-secrets/
+
+* Do a graceful shutdown
+
+https://github.com/fordsfords/blink/tree/gh-pages
+
+
+* NEONCopy of 8 words at a time
+
+      VLDM r1!, {d0-d7}
+      VSTM r0!, {d0-d7}
+      SUBS r2, r2, #0x40
+      BGE NEONCopy
+
+* I AM seeing major filesystem corruption in chip-1, chip-5
+
+And sigh, temp is not ramfs either. Nearly nobody coming from debian seems to
+understand the need to never write flash. The openwrt folk had this hard lesson
+burned right into them.
+
+I will have to reflash
+
+systemctl enable tmp.mount - like that bit of magic was easier to understand
+than /etc/fstab
+
+# UNCONFIGURED FSTAB FOR BASE SYSTEM
+tmpfs /tmp tmpfs defaults 0 0
+tmpfs /var/tmp tmpfs defaults 0 0
+
+http://www.chip-community.org/index.php/Flash#Extend_life
+
+systemctl set-default multi-user.target - disable the gui
+
+** chip-1 was toast while I was doing these
+
+* Finally wrote v6_equal and got rid of memcmp
+with my luck memcmp(x,y,16) was more efficient, but I can roll a benchmark now.
+Kind of need to get better about forcing alignment elsewhere. The arm assembly
+is emitting unaligned loads...
+
+** MIPS assembly
+
+** ARM 64 bit assembly
+Have to go boot that box
+** ARM 32 bit assembly (gcc 4.9)
+To me, I'd have cleared 8 regs, loaded 4 at a time, xored each then orred them.
+A dual issue arch would have only stalled on the loads and last or. And, sigh -
+this still generates a call to a subroutine in the -Os mode, inlined with -O3
+
+        bne     .L21    @,
+        ldr     r3, [r4, #4]    @ tmp250, MEM[base: _8, offset: 4B]
+        ldr     r6, [r0, #4]    @ MEM[(const unsigned int *)prefix_12(D) + 4B], MEM[(const unsigned int *)prefix_12(D) + 4B]
+        eors    r6, r6, r3      @, D.7287, MEM[(const unsigned int *)prefix_12(D) + 4B], tmp250
+        ldr     r3, [r4]        @ tmp251, MEM[base: _8, offset: 0B]
+        mov     ip, r3  @ tmp251, tmp251
+        ldr     r3, [r0]        @ tmp252, MEM[(const unsigned int *)prefix_12(D)]
+        eor     ip, ip, r3      @ D.7287, tmp251, tmp252
+        ldr     r3, [r4, #8]    @ tmp255, MEM[base: _8, offset: 8B]
+        orr     r8, r6, ip      @ D.7287, D.7287, D.7287
+        ldr     r6, [r0, #12]   @ MEM[(const unsigned int *)prefix_12(D) + 12B], MEM[(const unsigned int *)prefix_12(D) + 12B]
+        mov     ip, r3  @ tmp255, tmp255
+        ldr     r3, [r0, #8]    @ tmp256, MEM[(const unsigned int *)prefix_12(D) + 8B]
+        eor     ip, ip, r3      @ D.7287, tmp255, tmp256
+        ldr     r3, [r4, #12]   @ tmp259, MEM[base: _8, offset: 12B]
+        orr     ip, r8, ip      @ D.7287, D.7287, D.7287
+        eors    r6, r6, r3      @, D.7287, MEM[(const unsigned int *)prefix_12(D) + 12B], tmp259
+        orrs    r3, ip, r6      @ tmp248, D.7287, D.7287
+        beq     .L21    @,
+
+** NEON assembly
+I count at least 12 clocks of processing here. No matter how bad the stall is,
+emitting a neon instruction would help...
+
+if there was some way some how to do the mov ip, neonreg, mov ip+x, neonreg,
+xor, (store it back) - bne, I free up 8 main registers for "other stuff". It
+gets even better when comparing 2 prefixes (as in find_* - 4 loads, 2 xors, an
+or, then store it back, at the cost of 4 neon registers - which fills the
+pipeline, and keeps the integer unit doing other stuff....
+
+** the x86_64 assembly makes me happy though I could be delusional
+It looks like it doesn't manage to keep the core prefix in a reg while walking 
+the pointer tree in find_* and not spill. But still - WAY better than memcmp
+I think.
+
+        movq    16(%r8), %r11   # MEM[base: _9, offset: 16B], MEM[base: _9, offset: 16B]
+        movq    24(%r8), %r10   # MEM[base: _9, offset: 24B], MEM[base: _9, offset: 24B]
+        xorq    (%rdx), %r11    # MEM[(const long unsigned int *)src_prefix_19(D)], D.5107
+        xorq    8(%rdx), %r10   # MEM[(const long unsigned int *)src_prefix_19(D) + 8B], D.5107
+        orq     %r10, %r11      # D.5107, tmp153
+        jne     .L21    #,
+
+
+
+* Killing network manager was a pita
+
+But it totally saved on cpu and crash.
+
+I basically did it via:
+
+wpa_supplicant -dd -Dnl80211 -iwlan0 -c /etc/wpa_supplicant/chip.conf  &
+root@chip-6:/etc/wpa_supplicant# ifconfig wlan0 up
+root@chip-6:/etc/wpa_supplicant# dhclient wlan0
+
+but in doing that I couldn't get back into the system via anything but serial.
+
+
+* On the chips, I think... in the end what's killing them
+is networkmanager going crazy listening to netlink. 
+they were red-hot when I rebooted them
+
+because odhcpd is smarter we don't pound it as hard. Have to look into the
+bpf stuff in that. That looks HANDY.
+
+* Killed the thinko on source specific
+
+
+* And like an hour later (after trying to announce stuff with a longer expires)
+
+I still have 2000 unreachable routes in the archer.
+
+* Going back into a chip via serial termainal
+
+The wifi driver is completely wedged. Ah, well, I wanted to blow up
+multicast....
+
+and if you reboot the chip, the local usb interface on this side recognises
+that the driver went away, does recreate the interface, but does not up it again
+so it is usable.
+
+That's ok, when the chip comes up in this state, it doesn't get a usable
+anything
+
+The chips, btw, will not "just start" if you plug the battery in. Nor do they
+seem to respond to what I thought was the power button. Unplugging the battery
+works but it is very fragile. I tried one script, and it constantly polled the
+cpu for the button, instead of blocking.
+
+You can learn battery status from battery.sh
+
+https://bbs.nextthing.co/t/usb-power-and-ups-battery-power-button/2812/4
+
+* In going back to doing this using the default babel daemon
+
+I managed to completely crash all the chips on the network. 
+
+Running out of cpu doesn't help either.
+
+* Insight #3 
+
+and then everybody announces route retractions
+while everybody is trying to get routes
+Randomizing and rate limiting the retractions would help
+Finding some way to aggregate a retraction would help
+
+... And all this started merely because I was trying to A) blow up multicast and
+B) look into why netlink and sending packets sometimes failed
+
+I downgraded my test to just inject 1000 routes...
+
+* Insight #2
+
+Everybody else starts getting those routes - but does not respect the
+initial announcement, and re-announces with an interval of its default.
+
+And then the network collapses.
+
+* Insight
+
+OK, I'm announcing 10,000 routes. I know that I can send 80 per packet
+1k * 125 at 1Mbit (13ms) 1.6sec just to announce the routes.
+
+And the insight was this is times the number of speakers on the link
+So if I have 10 speakers rebroadcasting this amount - thats 16 seconds
+gone out of the 16 without any further traffic.
+
+The rate limiter is in the wrong place, I think, I still need to 
+get hellos out there, no matter what.
+
+When I have a ton of routes, I need to start changing the announced
+interval, and also start bumping up the hello interval. And make sure that gets
+out there....
+
+Another idea is to announce that I hear X number of routes on this link
+in the multicast IHU. They may be disjoint, but the router_id that hears the
+most routes from a given router_id is a winner. 
+
+And I'd need to be counting all the routes in my route table to get an estimate
+and in order to flood the routes
+
+And always reannounce the most bestest biggest routes - like src specific and
+default gateways - more often.
+
+I always wondered where the hard 10,000 route limit came from, it wasn't
+cpu - but the protocol implementation itself.
+
+* Chips don't have telnet and their nc is broken
+
+root@chip-1:~/babeld# nc ::1 33123
+::1: forward host lookup failed: Unknown host
+root@chip-1:~/babeld# 
+
+
+* babeld.c routerid can change
+during early boot we don't have a stable set of interfaces
+bridging might be kicking in, wifi still be setting up
+
+    if(!have_id && !random_id) {
+        /* We use all available interfaces here, since this increases the
+           chances of getting a stable router-id in case the set of Babel
+           interfaces changes. */
+
+* One of my other kvetches
+
+always picks up the wifi links sooner
+
+root@chip-1:~/babeld# ip route | grep usb
+default via 172.26.97.1 dev usb0  proto babel onlink 
+169.254.0.0/16 dev usb0  scope link  metric 1000 
+172.26.16.0/24 via 172.26.97.1 dev usb0  proto babel onlink 
+172.26.20.0/22 via 172.26.97.1 dev usb0  proto babel onlink 
+172.26.96.100 via 172.26.97.1 dev usb0  proto babel onlink 
+
+
+* netlink COULD return 0
+
+and why?
+
+-        if(len < 0) {
++    if(len < 0) {
+             perror("netlink_read: recvmsg()");
+             return -1;
+
+
+* TODO poke into why we get the send error twice
+
+Interface eno1 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 0
+Interface eno1 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 0
+send: Cannot assign requested address
+send: Cannot assign requested address
+
+So when I take the wifi interface down I don't see the down event
+
+send: Cannot assign requested address
+send: Cannot assign requested address
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+I bring it up
+
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+Interface wlp2s0 has no link-local address.
+setsockopt(IPV6_LEAVE_GROUP): Cannot assign requested address
+Type: 2
+send: Cannot assign requested address
+send: Cannot assign requested address
+
+Not sure why we call leave group.
+
+Anyway I bring that up and then take eno1 down
+
+send: Cannot assign requested address
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+// Why would I call ADD during an event like this?
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+* So I can backfil the "good" things into the basic babel branch until it breaks
+
+** DONE More robust error checking -- which may be too robust
+** Compile guards
+** Whole program optimization
+** 
+
+* So I went back to the default babel for source specific and it worked
+
+somewhere in all these changes, I blew something up. No surprising.
+
+Perhaps you can get a temporary file exists message? or... 
+
+ALSO:
+
+in babeld I got a new message when I took the interface up and down.
+
+ENETDOWN
+
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(ADD): Network is down
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+kernel_route(FLUSH): No such process
+
+
+* Let's test this noprefixroute idea
+
+* What to do with ra and source specific
+
+Right now my rabel is in such a state that you cannot install a src specific
+address on top of a local address, or so it seems.
+
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 nexthop 172.26.16.5
+kernel_route(ADD): File exists
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev 2 nexthop fe80::32b5:c2ff:fe75:7faa
+kernel_route(ADD): File exists
+
+root@dancer:~/git/rabeld# ip -6 route | grep default
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65524sec hoplimit 64 pref high
+default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 2048  pref medium
+
+root@dancer:~/git/rabeld# ip -6 route | grep from
+2406:da00:ff00::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+** But... wait - Yea! this looks like a genuine bug in babel because it works from iproute!
+Could this be the order of the args to netlink?
+
+ip -6 route add default from 2601:646:4101:a740::/60 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+
+root@dancer:~/git/rabeld# ip -6 route | grep from
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+And the ipv4 message seems odd, as if it's going to be from it should be
+reversed, but that's perhaps a debugging message.
+
+failed kernel_route: add 172.26.16.0/24 from ::/0 table 254 metric 0 dev 2 nexthop 172.26.16.5
+kernel_route(ADD): File exists
+
+
+* What to do with noprefixroute?
+
+And for that matter these - I think ever announcing addresses with short
+lifetimes is bad - and at the same time we could be smarter about doing the
+retraction during the preferred_lft period - e.g. retract the route 2 minutes
+after the preferred_lft expires. Nah.
+
+But what I'd like to do is not announce so many frickin addresses with routes
+attached. If I have a /128 on the same network as my /64, just announce the
+/64 and be done with it.
+
+And. Sigh - ipv4 has no noprefixroute concept.
+
+2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    inet6 fdaf:dc63:6de9:8:74d8:e400:84f9:38ce/64 scope global temporary dynamic 
+       valid_lft 592232sec preferred_lft 73595sec
+    inet6 fdaf:dc63:6de9:8:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft forever preferred_lft forever
+    inet6 2601:646:4101:a740:74d8:e400:84f9:38ce/64 scope global temporary dynamic 
+       valid_lft 299312sec preferred_lft 73595sec
+    inet6 2601:646:4101:a740:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft 299312sec preferred_lft 299312sec
+    inet6 fe80::eea8:6bff:fefe:9a2/64 scope link 
+       valid_lft forever preferred_lft forever
+3: wlp2s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    inet6 fd32:7d58:8d63::199/128 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fd32:7d58:8d63:0:a120:a749:ac4:cddf/64 scope global noprefixroute 
+       valid_lft forever preferred_lft forever
+    inet6 2601:646:4101:2de0:d041:214e:f40a:fe12/64 scope global noprefixroute dynamic 
+       valid_lft 307239sec preferred_lft 307239sec
+    inet6 fe80::19e7:b4bd:1a5e:561a/64 scope link 
+       valid_lft forever preferred_lft forever
+
+
+* Profile
+
+Box was relatively idle during these runs
+
+ach sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 57.46      5.40     5.40  1003792     0.01     0.01  find_resend
+ 18.75      7.16     1.76  5624187     0.00     0.00  find_route_slot
+  3.30      7.47     0.31  1433517     0.00     0.01  update_route
+  1.60      7.62     0.15     4569     0.03     0.20  update_neighbour_metric
+  1.12      7.72     0.11                             compare_buffered_updates
+  1.07      7.82     0.10                             parse_packet
+  0.96      7.91     0.09  1344015     0.00     0.00  really_send_update
+  0.85      7.99     0.08   176097     0.00     0.01  flushupdates
+  0.80      8.07     0.08  6450137     0.00     0.00  prefix_cmp
+  0.75      8.14     0.07     1298     0.05     0.05  route_stream
+
+
+* Let's try injecting only 4000 routes
+
+I installed 2000 routes - they were reachable briefly, then
+went unreachable briefly, then went reachable.
+
+One of the other boxes on the link went unreachable and stayed
+that way....
+
+really want atomic updates!!!!
+
+Now I have one route left over
+
+@dancer:~/git/rabeld$ ip -6 route | grep fd44
+fd44:0:0:7d0::/64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+Trust. But verify.
+
+* Sometime above about 4000 routes
+
+everything goes unreachable.
+
+I am increasingly certain babel has always been borken these ways.
+
+send(unicast): Cannot assign requested address
+
+Unreachable default route!
+Unreachable default route!
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+failed kernel_route add during replace: modify ::/0 from 2601:646:4101:2de0::/60 table 254 metric 65535 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+Add failed during replace: File exists
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+Unreachable default route!
+failed kernel_route: add ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev 2 nexthop fe80::32b5:c2ff:fe75:7faa
+failed kernel_route add during replace: modify ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+Add failed during replace: File exists
+
+ailed kernel_route add during replace: modify ::/0 from 2601:646:4101:a740::/60 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+Add failed during replace: File exists
+failed kernel_route: flush ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+Unreachable default route!
+Unreachable default route!
+
+
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach | wc -l
+8306
+d@dancer:~/git/rabeld$ ip -6 route | grep -v unreach | wc -l
+1715
+
+Then everything goes unreachable
+
+d@dancer:~/git/rabeld$ ip -6 route | grep -v unreach | wc -l
+18
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach | wc -l
+10003
+
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+
+FIXME: Get the fucking metric here
+failed kernel_route: flush ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process ???
+failed kernel_route: add ::/0 from 2601:646:4101:2de0::/60 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(ADD): File exists
+
+
+* Added more debugging code
+
+I am not getting any "default from" routes at the moment
+It wouldn't surprise me if everything else on the net is hosed
+It also wouldn't surprise me my kernel is the cause of all this.
+
+** Disabling an interface via network manager does this:
+
+*** TODO I am curious what noprefixroute does nowadays
+
+*** I wonder how many other routes were on this in the window
+
+failed kernel_route: flush 172.26.96.61/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.96.65/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.113
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.201.127/32 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::61/128 from ::/0 table 254 metric 0 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::65/128 from ::/0 table 254 metric 0 dev 3 nexthop fe80::3aa2:8cff:fe5d:effb
+kernel_route(FLUSH): No such process
+
+** And bringing it back up does this:
+
+kernel_route(FLUSH): No such process
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+send(unicast): Cannot assign requested address
+
+* printfs checking to see if stuff got spat on didn't help
+
+I can do more robust checking than I did. But I need to go
+look at the netlink bug workarounds on the web.
+
+* Ironically FQ will help
+
+There is a single queue for all netlink events. This means
+that if work is backlogged on a given queue, and the interface
+goes away as it does here - we used to just hammer on the socket
+for 500ms. Now I'm only doing it for 50 (100?), but it isn't
+going to clear that fast.
+
+A "cure" would be to use select on one multicast group per idea.
+
+This might give us better ipv4 performance when ipv6 is acting up,
+it certainly will let us see interface changes faster, so instead
+of madly retrying, just return on a send failure and check to see
+if something happened elsewhere in the system
+
+For all I know this has some bearing on getting EAGAIN in the wrong place
+as documented elsewhere on the net for openvswitch.
+
+Fixing the select loop will take some work.
+
+
+Type: 2
+Interface wlp2s0 has no link-local address.
+Type: 2
+setsockopt(IPV6_JOIN_GROUP): Address already in use
+Type: 2
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+
+* OK we can still do ourselves in
+
+failed kernel_route: flush fd44:0:0:ae8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:ae9::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:aea::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:aeb::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+
+And now, great - it shows up as static
+
+root@dancer:~/git/rabeld# vi ds
+root@dancer:~/git/rabeld# ip -6 route | grep fd44:0:0:ae8::/64
+
+fd44:0:0:ae8::/64 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto static metric 1024  pref medium
+unreachable fd44:0:0:ae8::/64 dev lo proto babel metric 4294967295  error -113 pref medium
+
+* Network Manager fear and revulsion
+
+Doesn't have a way to put in protos.
+
+Want it to use "proto dhcp" Doesn't. Totally unclear on all the
+machinery
+
+** DONE Sent an email to the list
+
+This, on the other hand, will at least give everything an overlarge
+metric.
+
+/etc/NetworkManager.conf
+
+[connections]
+ipv6.route-metric=2048
+ipv4.route-metric=2048
+
+root@dancer:/etc/NetworkManager# ip -6 route show | grep 'proto ra'
+2601:646:4101:2de0::/64 dev wlp2s0 proto ra metric 2048  pref medium
+2601:646:4101:2de0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto ra metric 2048  pref medium
+fd32:7d58:8d63::/64 dev wlp2s0 proto ra metric 2048  pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto ra metric 2048  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65113sec hoplimit 64 pref high
+
+root@dancer:/etc/NetworkManager# ip -6 route | grep default
+default from 2601:646:4101:2de0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65067sec hoplimit 64 pref high
+default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 2048  pref medium
+
+
+
+
+* So I slammed stuff to printf around the error...
+
+and haven't been able to duplicate it since. Well, it just took longer.
+
+* More
+
+
+It turns out debian distributes an old version - 1.5
+
+fd44:0:0:95a::/64 via fe80::3aa2:8cff:fe5d:f9e5 dev wlan0  proto static  metric 1024
+
+
+Another chip is showing this:
+
+fd44:0:0:69::/64 via fe80::19e7:b4bd:1a5e:561a dev wlan0  proto static  metric 1024
+*
+
+fe80::3aa2:8cff:fe5d:effb is currently the source of the expired routes
+that should have expired minutes ago.
+
+but there are others
+
+add route 12b860 prefix fd44:0:0:2524::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d10b8 prefix fd44:0:0:2524::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 67098 prefix fd44:0:0:2525::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+add route 12b8b0 prefix fd44:0:0:2525::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d11a8 prefix fd44:0:0:2525::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 75068 prefix fd44:0:0:2526::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+add route 12b900 prefix fd44:0:0:2526::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18008 refmetric 17666 via fe80::16cc:20ff:fee5:64c1 expires 0 if wlan0
+add route d1298 prefix fd44:0:0:2526::/64 from ::/0 installed no id 02:0d:b9:ff:fe:41:6c:2c metric 18362 refmetric 17682 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlan0
+add route 78a18 prefix fd44:0:0:2527::/64 from ::/0 installed yes id 02:0d:b9:ff:fe:41:6c:2c metric 17690 refmetric 17410 via fe80::3aa2:8cff:fe5d:effb expires 0 if wlan0
+
+
+
+
+* Status -
+
+So I reverted the core routine back to the original, hit it with 10,000
+routes - and it got the kernel table into a bad state, but only had
+8 failures doing so. And - waiting overnight as I gave up - at some point
+after all these routes were removed - the kernel table became correct.
+
+I did only listen on eno1 this time, where before wifi was in the loop.
+
+I am beginning to smell 3 possibily interrelated bugs here:
+
+A) Kernel refusing valid route updates - or babel getting confused on what it
+injected -
+
+B) the daemon itself getting into a state where it's announcing and responding
+more to stuff than getting itself into a good state
+
+C) the protocol wildcard stuff maybe?
+
+
+root@dancer:~/git/rabeld# ./babeld eno1
+Type: 0
+failed kernel_route: add fd44:0:0:bf8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add fd44:0:0:c0c::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: add fd44:0:0:c4f::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(ADD): File exists
+failed kernel_route: flush fd44:0:0:bf8::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:c0c::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+failed kernel_route: flush fd44:0:0:c4f::/64 from ::/0 table 254 metric 0 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+
+
+
+* a more encouraging error
+
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+failed kernel_route: modify 172.26.200.0/22 from ::/0 table 254 metric 65535 dev 2 nexthop 172.26.16.5
+failed kernel_change: modify 172.26.200.0/22 from ::/0 table 254 metric 0 dev 3 nexthop 172.26.201.1
+kernel_route(MODIFY): Invalid argument
+
+
+* yesterday
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 39.53      3.72     3.72   152444     0.02     0.02  unsatisfied_request
+ 33.05      6.83     3.11   192175     0.02     0.02  satisfy_request
+  9.56      7.73     0.90    51894     0.02     0.02  request_redundant
+  8.82      8.56     0.83    21789     0.04     0.04  record_resend
+  2.66      8.81     0.25  1469765     0.00     0.00  find_route_slot
+  1.01      8.91     0.10 15118915     0.00     0.00  timeval_minus_msec
+  0.74      8.98     0.07      585     0.12     3.28  update_neighbour_metric
+  0.43      9.02     0.04  2165216     0.00     0.00  prefix_cmp
+  0.32      9.05     0.03   228245     0.00     0.02  update_route
+  0.32      9.08     0.03   185923     0.00     0.00  netlink_read.con
+
+kernel_route(MODIFY metric): No such device
+kernel_route(MODIFY metric): No such device
+netlink_read: recvmsg(): No buffer space available
+^Croot@dancer:~/git/rabeld#
+
+kernel_route(MODIFY metric): No such device
+kernel_route(MODIFY metric): No such device
+kernel_route(MODIFY metric): Invalid argument
+
+growing terror, that absolutely everything I depended on daily
+didn't have robust error checking.
+
+Odhcpd
+
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+Mon Feb 13 17:03:48 2017 daemon.debug odhcpd[13786]: Received 116 Bytes from kernel%netlink
+
+
+d@dancer:~/git/rabeld$ cat babel2.log | sort | uniq -c
+    365 kernel_route(ADD): File exists
+   2121 kernel_route(FLUSH): No such process
+ 303320 kernel_route(MODIFY metric): Invalid argument
+    329 kernel_route(MODIFY metric): No such device
+
+
+v 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::61/128 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+kernel_route(FLUSH): No such process
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+send(unicast): Resource temporarily unavailable
+failed kernel_route: add fd69:3860:b137::/48 from ::
+
+failed kernel_route: flush fd44:0:0:d22::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d23::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d24::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d25::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d26::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d27::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d28::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d29::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2a::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2b::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2c::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2d::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2e::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d2f::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d30::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d31::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d32::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d33::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d34::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d35::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d36::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d37::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d38::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d39::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3a::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3b::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3c::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3d::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3e::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d3f::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d40::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d41::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d42::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d43::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d44::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d45::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d46::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d47::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d48::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d49::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4a::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4b::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4c::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4d::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4e::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d4f::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d50::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d51::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d52::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d53::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d54::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d55::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d56::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d57::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d58::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d59::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d5a::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d5b::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:d5c::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fde8:9cb6:b42e::/60 from ::/0 table 254 metric 65535 dev 2 nexthop fe80::20d:b9ff:fe41:6c2d
+kernel_route(FLUSH): No such process
+send: Resource temporarily unavailable
+send: Resource temporarily unavailable
+send(unicast): Resource temporarily unavailable
+send(unicast): Resource temporarily unavailable
+send(unicast): Resource temporarily unavailable
+send(unicast): Resource temporarily unavailable
+failed kernel_route: flush 172.26.96.65/32 from ::/0 table 254 metric 65535 dev 3 nexthop 172.26.201.113
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::65/128 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:effb
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.96.64/32 from ::/0 table 254 metric 65535 dev 3 nexthop 172.26.201.114
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::64/128 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::7ec7:9ff:fede:2bb5
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.96.61/32 from ::/0 table 254 metric 65535 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush 172.26.201.127/32 from ::/0 table 254 metric 65535 dev 3 nexthop 172.26.201.127
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd99::61/128 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::3aa2:8cff:fe5d:f9e5
+kernel_route(FLUSH): No such process
+send: Resource temporarily unavailable
+
+d@dancer:~/git/rabeld$ cat *.log  | sort | uniq -c
+   2127 kernel_route(ADD): File exists
+   5447 kernel_route(FLUSH): No such process
+ 624589 kernel_route(MODIFY metric): Invalid argument
+    570 kernel_route(MODIFY metric): No such device
+    123 send: Resource temporarily unavailable
+     16 send(unicast): Resource temporarily unavailable
+
+NO SUCH PROCESS??? is ESRCH?
+ENODEV no such device
+ENOENT no such
+
+
+https://github.com/openvswitch/ovs/blob/master/lib/netlink-socket.c
+
+KErnel bu error code as bytes read???
+
+        error = (retval < 0 ? errno
+                 : retval == 0 ? ECONNRESET /* not possible? */
+                 : nlmsghdr->nlmsg_len != UINT32_MAX ? 0
+                 : retval);
+
+ENOBUFS - we've lost state
+
+v 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:f21::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:f22::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:f24::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:f27::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+
+failed kernel_route: flush 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(FLUSH): No such process
+failed kernel_route: add 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 table 254 metric 0 dev 3 nexthop fe80::16cc:20ff:fee5:64c1
+kernel_route(ADD): File exists
+send: Resource temporarily unavailable
+
+
+
+
+So I got stuck in this state:
+
+kernel_route(FLUSH): No such process
+failed kernel_route: flush fd44:0:0:ac7::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::7ec7:9ff:fede:2bb5
+kernel_route(FLUSH): No such process
+
+d@dancer:~/git/babeld$ ip -6 route  | grep fd44:0:0:ac7::
+fd44:0:0:ac7::/64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+d@dancer:~/git/babeld$ sudo ip -6 route flush fd44:0:0:ac7::/64
+[sudo] password for d:
+d@dancer:~/git/babeld$ ip -6 route  | grep fd44:0:0:ac7::
+gone
+
+254 metric 65535 dev 3 nexthop fe80::7ec7:9ff:fede:2bb5
+Error: inet prefix is expected rather than "metric".
+d@dancer:~/git/babeld$ sudo ip -6 route flush fd44:0:0:ac6::/64 from ::/0 table 254 metric 65535 dev 3 nexthop fe80::7ec7:9ff:fede:2bb5
+
+??? Is next hop the same as via?
+
+If I flush something do I specify the metric??ip -
+
+d@dancer:~/git/babeld$ sudo ip -6 route flush fd44:0:0:ac6::/64 from ::/0 table 254 dev wlp2s0 nexthop fe80::7ec7:9ff:fede:2bb5
+Error: inet prefix is expected rather than "nexthop".
+d@dancer:~/git/babeld$ sudo ip -6 route flush fd44:0:0:ac6::/64 from ::/0 table 254 dev wlp2s0 via  fe80::7ec7:9ff:fede:2bb5
+d@dancer:~/git/babeld$ ip -6 route show | grep fd44:0:0:ac6
+d@dancer:~/git/babeld$
+
+A cool thing is I'm now in a state where all my known good routes are
+toast
+
+d@dancer:~/git/babeld$ ip -6 route | grep fd99::61
+fd99::61 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::61 dev lo proto babel metric 4294967295  error -113 pref medium
+
+
+
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable 2601:646:4101:2de0::/60 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable 2601:646:4101:a740::/60 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd69:3860:b137::/48 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::13 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::61 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::64 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::65 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 4294967295  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 4294967295  error -113 pref medium
+
+
+
+
+up vote
+2
+down vote
+I wonder if you are running on a 64bits machine. If it is the case, I
+suspect that the use of an int as the type of payload can be the root of
+some issues as genlmsg_new() expects a size_t which is 64bits on x86_64.
+
+FILE exists
+
+EINVAL - invalid argument
+
+(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, ...) , or
+nl_socket_set_buffer_size() if y
+
+https://github.com/golang/go/issues/5932
+
+./babel -t 253
+
+table 253 proto static???
+
+                if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_FILTER,
+                                &bpf_prog, sizeof(bpf_prog))) {
+                        syslog(LOG_ERR, "Failed to set BPF: %s", strerror(errno));
+                        ret = -1;
+                        goto out;
+                }
+
+I am still missing one edge case from this and I'm not sure
+what it is.
+
+d@dancer:~/git/rabeld$ ip route
+default via 172.26.16.5 dev eno1 proto babel online
+default via 172.26.201.1 dev wlp2s0 proto static metric 600
+172.26.16.0/24 dev eno1 proto kernel scope link src 172.26.16.3
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink
+172.26.96.61 via 172.26.201.127 dev wlp2s0 proto babel onlink
+172.26.96.64 via 172.26.201.114 dev wlp2s0 proto babel onlink
+172.26.96.65 via 172.26.201.113 dev wlp2s0 proto babel onlink
+172.26.96.66 via 172.26.201.190 dev wlp2s0 proto babel onlink
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 metric 600
+172.26.201.127 via 172.26.201.127 dev wlp2s0 proto babel onlink
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink
+
+024  pref medium
+fd44:0:0:a01::/64 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto static metric 1024  pref medium
+fd44:0:0:a02::/64 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto static metric 1024  pref medium
+fd44:0:0:a03::/64 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto static metric 1024  pref medium
+unreachable fd55::/64
+
+d@dancer:~/git/rabeld$ ip -6 route
+default from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+default from 2601:646:4101:2de0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2600:3c01:e001:9310::/64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2601:646:4101:2de0::/64 dev wlp2s0 proto ra metric 600  pref medium
+2601:646:4101:2de0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2601:646:4101:a740::/64 dev eno1 proto kernel metric 256  expires 291141sec pref medium
+2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2602:24c:61bf:9828::/64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::199 dev wlp2s0 proto kernel metric 256  pref medium
+fd32:7d58:8d63::/64 dev wlp2s0 proto ra metric 600  pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::13 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd99::61 via fe80::3aa2:8cff:fe5d:f9e5 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::65 via fe80::3aa2:8cff:fe5d:effb dev wlp2s0 proto babel metric 1024  pref medium
+fd99::66 via fe80::3aa2:8cff:fe5d:d369 dev wlp2s0 proto babel metric 1024  pref medium
+fdaf:dc63:6de9:8::/64 dev eno1 proto kernel metric 256  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fe80::/64 dev wlp2s0 proto kernel metric 256  pref medium
+fe80::/64 dev eno1 proto kernel metric 256  pref medium
+default via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto static metric 600  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65305sec hoplimit 64 pref high

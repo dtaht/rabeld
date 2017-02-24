@@ -19,7 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+#ifndef _BABEL_CONFIGURATION
+#define _BABEL_CONFIGURATION
 /* Values returned by parse_config_from_string. */
 
 #define CONFIG_ACTION_DONE 0
@@ -28,30 +29,36 @@ THE SOFTWARE.
 #define CONFIG_ACTION_MONITOR 3
 #define CONFIG_ACTION_UNMONITOR 4
 #define CONFIG_ACTION_NO 5
+#define CONFIG_ACTION_DUMP_NEIGHBOURS 6
+#define CONFIG_ACTION_DUMP_ROUTES 7
+#define CONFIG_ACTION_DUMP_INTERFACES 8
+#define CONFIG_ACTION_DUMP_ME 9
 
 struct filter_result {
-    unsigned int add_metric; /* allow = 0, deny = INF, metric = <0..INF> */
     unsigned char *src_prefix;
-    unsigned char src_plen;
+    unsigned int add_metric; /* allow = 0, deny = INF, metric = <0..INF> */
     unsigned int table;
+    unsigned char src_plen;
+    unsigned char pad[3];
 };
 
 struct filter {
-    int af;
     char *ifname;
+    int af;
     unsigned int ifindex;
     unsigned char *id;
     unsigned char *prefix;
+    unsigned char *src_prefix;
     unsigned char plen;
     unsigned char plen_ge, plen_le;
-    unsigned char *src_prefix;
     unsigned char src_plen;
     unsigned char src_plen_ge, src_plen_le;
-    unsigned char *neigh;
+    /* two byte hole */
     int proto;                  /* May be negative */
-    struct filter_result action;
+    unsigned char *neigh;
     struct filter *next;
-};
+    struct filter_result action;
+} CACHEALIGN;
 
 extern struct interface_conf *default_interface_conf;
 
@@ -77,3 +84,4 @@ int install_filter(const unsigned char *prefix, unsigned short plen,
                    const unsigned char *src_prefix, unsigned short src_plen,
                    struct filter_result *result);
 int finalise_config(void);
+#endif

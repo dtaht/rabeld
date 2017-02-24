@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <errno.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -72,6 +73,8 @@ check_specific_first(void)
    contains a linked list of the routes to this prefix, with the
    installed route, if any, at the head of the list. */
 
+// FIXME logic again - callers 
+
 static int
 route_compare(const unsigned char *prefix, unsigned char plen,
               const unsigned char *src_prefix, unsigned char src_plen,
@@ -86,8 +89,13 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         return -1;
     }
 
+/*
+    FIXME: don't really think we care about which way it is not equal
+    i = v6_nequal(prefix, route->src->prefix);
+    if(i) does qsort care about it being -1 or just check the sign bit?
+*/
     i = memcmp(prefix, route->src->prefix, 16);
-    if(i != 0)
+    if(i != 0 ) 
         return i;
 
     if(plen < route->src->plen)
@@ -99,9 +107,14 @@ route_compare(const unsigned char *prefix, unsigned char plen,
         if(route->src->src_plen > 0)
             return -1;
     } else {
-        i = memcmp(src_prefix, route->src->src_prefix, 16);
+	/* FIXME: Don't think we care greator or lessor
+        i = v6_nequal(src_prefix, route->src->src_prefix);
+        if(i) return the sign bit
+	*/
+        i = memcmp(src_prefix, route->src->src_prefix,16);
         if(i != 0)
             return i;
+
         if(src_plen < route->src->src_plen)
             return -1;
         if(src_plen > route->src->src_plen)
@@ -114,7 +127,7 @@ route_compare(const unsigned char *prefix, unsigned char plen,
 /* Performs binary search, returns -1 in case of failure.  In the latter
    case, new_return is the place where to insert the new element. */
 
-static int
+static inline int
 find_route_slot(const unsigned char *prefix, unsigned char plen,
                 const unsigned char *src_prefix, unsigned char src_plen,
                 int *new_return)
@@ -160,7 +173,7 @@ find_route(const unsigned char *prefix, unsigned char plen,
     route = routes[i];
 
     while(route) {
-        if(route->neigh == neigh && memcmp(route->nexthop, nexthop, 16) == 0)
+        if(route->neigh == neigh && v6_equal(route->nexthop, nexthop))
             return route;
         route = route->next;
     }
@@ -212,7 +225,8 @@ resize_route_table(int new_slots)
 static struct babel_route *
 insert_route(struct babel_route *route)
 {
-    int i, n;
+    int i;
+    int n = 0;
 
     assert(!route->installed);
 
@@ -369,12 +383,24 @@ flush_interface_routes(struct interface *ifp, int v4only)
     }
 }
 
-struct route_stream {
-    int installed;
-    int index;
+// I am tempted to put the bloody extra bits into 
+// the next pointer, cause we don't need 'em.
+// Which someone would kill me for using.
+// Or use the top few bits of the installed int
+
+/* struct route_stream {
+    unsigned index:29;
+    unsigned installed:3;
     struct babel_route *next;
 };
 
+*/
+
+struct route_stream {
+    int index;
+    int installed;
+    struct babel_route *next;
+};
 
 struct route_stream *
 route_stream(int which)
@@ -384,22 +410,26 @@ route_stream(int which)
     if(!check_specific_first())
         fprintf(stderr, "Invariant failed: specific routes first in RIB.\n");
 
-    stream = calloc(1, sizeof(struct route_stream));
+    stream = malloc(sizeof(struct route_stream));
     if(stream == NULL)
         return NULL;
 
     stream->installed = which;
-    stream->index = which == ROUTE_ALL ? -1 : 0;
+    stream->index = which == ROUTE_ALL ? -1 : 0; // I don't understand this
     stream->next = NULL;
 
     return stream;
 }
 
+// Don't see how adding a prefetch to either of these will help
+
 struct babel_route *
 route_stream_next(struct route_stream *stream)
 {
     if(stream->installed) {
-        while(stream->index < route_slots)
+        while(stream->index < route_slots) {
+	// this might go boom in some rare cases
+	//  __builtin_prefetch(routes[stream->index+1],0,1)
             if(stream->installed == ROUTE_SS_INSTALLED &&
                routes[stream->index]->src->src_plen == 0)
                 return NULL;
@@ -407,7 +437,7 @@ route_stream_next(struct route_stream *stream)
                 break;
             else
                 stream->index++;
-
+	}
         if(stream->index < route_slots)
             return routes[stream->index++];
         else
@@ -421,6 +451,7 @@ route_stream_next(struct route_stream *stream)
             stream->next = routes[stream->index];
         }
         next = stream->next;
+	__builtin_prefetch(next,0,1);
         stream->next = next->next;
         return next;
     }

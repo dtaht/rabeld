@@ -21,17 +21,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include <string.h>
+#include <unistd.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
+#include <string.h>
+#include <getopt.h>
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -81,6 +82,9 @@ const unsigned char zeroes[16] = {0};
 const unsigned char ones[16] =
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+#ifdef HAVE_NEON
+uint32x4_t n_ones,n_v4prefix,n_llprefix;
+#endif
 
 int protocol_port;
 unsigned char protocol_group[16];
@@ -98,6 +102,19 @@ static volatile sig_atomic_t exiting = 0, dumping = 0, reopening = 0;
 static int accept_local_connections(void);
 static void init_signals(void);
 static void dump_tables(FILE *out);
+
+volatile sig_atomic_t majortimeout = 0;
+
+int
+check_major_timeout(int tryagainsecs, char *msg) {
+    if(majortimeout == 1) {
+	fprintf(stderr,"%s\n", msg);
+        majortimeout = 0;
+        alarm(tryagainsecs);
+	return 1;
+	}
+    return 0;
+}
 
 static int
 kernel_route_notify(struct kernel_route *route, void *closure)
@@ -154,6 +171,11 @@ main(int argc, char **argv)
     unsigned int seed;
     struct interface *ifp;
 
+//#ifdef HAVE_NEON
+//    n_ones = vld1_u32(const unsigned int *) ones;
+//    n_v4prefix  = vld1_u32(const unsigned int *) v4prefix;
+//    n_llprefix = vld1_u32(const unsigned int *) llprefix;
+//#endif
     gettime(&now);
 
     rc = read_random_bytes(&seed, sizeof(seed));
@@ -591,13 +613,13 @@ main(int argc, char **argv)
     }
 
     debugf("Entering main loop.\n");
-
+    majortimeout = 0;
     while(1) {
         struct timeval tv;
         fd_set readfds;
 
         gettime(&now);
-
+	alarm(2);
         tv = check_neighbours_timeout;
         timeval_min(&tv, &check_interfaces_timeout);
         timeval_min_sec(&tv, expiry_time);
@@ -633,18 +655,18 @@ main(int argc, char **argv)
                 FD_SET(local_sockets[i].fd, &readfds);
                 maxfd = MAX(maxfd, local_sockets[i].fd);
             }
-            rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
+	    check_major_timeout(2,"Timeout processing setup");
+	    alarm(0);
+interrupted: rc = select(maxfd + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0) {
-                if(errno != EINTR) {
-                    perror("select");
-                    sleep(1);
-                }
+                if(errno == EINTR) goto interrupted;
                 rc = 0;
                 FD_ZERO(&readfds);
             }
         }
 
         gettime(&now);
+	alarm(2);
 
         if(exiting)
             break;
@@ -665,7 +687,6 @@ main(int argc, char **argv)
             if(rc < 0) {
                 if(errno != EAGAIN && errno != EINTR) {
                     perror("recv");
-                    sleep(1);
                 }
             } else {
                 FOR_ALL_INTERFACES(ifp) {
@@ -681,6 +702,7 @@ main(int argc, char **argv)
                 }
             }
         }
+	check_major_timeout(2,"Timeout: Interface processing took too long");
 
         if(local_server_socket >= 0 && FD_ISSET(local_server_socket, &readfds))
            accept_local_connections();
@@ -717,7 +739,8 @@ main(int argc, char **argv)
             check_interfaces();
             kernel_link_changed = 0;
         }
-
+	check_major_timeout(2,"Timeout: Kernel_link checking took too long");
+	
         if(kernel_routes_changed || kernel_addr_changed ||
            kernel_rules_changed || now.tv_sec >= kernel_dump_time) {
             rc = check_xroutes(1);
@@ -734,6 +757,9 @@ main(int argc, char **argv)
                 kernel_dump_time = now.tv_sec + roughly(30);
         }
 
+	check_major_timeout(2,
+            "Timeout: Xroute/Route/Rules processing took too long");
+
         if(timeval_compare(&check_neighbours_timeout, &now) < 0) {
             int msecs;
             msecs = check_neighbours();
@@ -747,11 +773,17 @@ main(int argc, char **argv)
             schedule_interfaces_check(30000, 1);
         }
 
+	check_major_timeout(2,
+            "Timeout: Interface checking took too long");
+
         if(now.tv_sec >= expiry_time) {
             expire_routes();
             expire_resend();
             expiry_time = now.tv_sec + roughly(30);
         }
+
+	check_major_timeout(2,
+            "Timeout: Route expiry/resend took too long");
 
         if(now.tv_sec >= source_expiry_time) {
             expire_sources();
@@ -768,11 +800,16 @@ main(int argc, char **argv)
             if(timeval_compare(&now, &ifp->update_flush_timeout) >= 0)
                 flushupdates(ifp);
         }
+	check_major_timeout(2,
+            "Timeout: send_hello send_update, flushupdates took too long");
 
         if(resend_time.tv_sec != 0) {
             if(timeval_compare(&now, &resend_time) >= 0)
                 do_resend();
         }
+
+	check_major_timeout(2,
+            "Timeout: resend took too long");
 
         if(unicast_flush_timeout.tv_sec != 0) {
             if(timeval_compare(&now, &unicast_flush_timeout) >= 0)
@@ -788,10 +825,15 @@ main(int argc, char **argv)
             }
         }
 
+	check_major_timeout(2,
+            "Timeout: buffer flush took too long");
+
         if(UNLIKELY(debug || dumping)) {
             dump_tables(stdout);
             dumping = 0;
         }
+	alarm(0);
+	majortimeout = 0;
     }
 
     debugf("Exiting...\n");
@@ -1001,6 +1043,12 @@ sigreopening(int signo)
 }
 
 static void
+sigalarm(int signo)
+{
+    majortimeout = 1;
+}
+
+static void
 init_signals(void)
 {
     struct sigaction sa;
@@ -1042,6 +1090,12 @@ init_signals(void)
     sa.sa_flags = 0;
     sigaction(SIGUSR2, &sa, NULL);
 
+    sigemptyset(&ss);
+    sa.sa_handler = sigalarm;
+    sa.sa_mask = ss;
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, NULL);
+
 #ifdef SIGINFO
     sigemptyset(&ss);
     sa.sa_handler = sigdump;
@@ -1055,8 +1109,9 @@ static void
 dump_route(FILE *out, struct babel_route *route)
 {
     const unsigned char *nexthop =
-        memcmp(route->nexthop, route->neigh->address, 16) == 0 ?
+        v6_nequal(route->nexthop, route->neigh->address) ?
         NULL : route->nexthop;
+
     char channels[100];
 
     if(route->channels_len == 0) {
@@ -1075,7 +1130,7 @@ dump_route(FILE *out, struct babel_route *route)
     }
 
     fprintf(out, "%s%s%s metric %d (%d) refmetric %d id %s "
-            "seqno %d%s age %d via %s neigh %s%s%s%s\n",
+            "seqno %d%s age %d via %s expires %d neigh %s%s%s%s\n",
             format_prefix(route->src->prefix, route->src->plen),
             route->src->src_plen > 0 ? " from " : "",
             route->src->src_plen > 0 ?
@@ -1086,6 +1141,7 @@ dump_route(FILE *out, struct babel_route *route)
             channels,
             (int)(now.tv_sec - route->time),
             route->neigh->ifp->name,
+	    route->expires,
             format_address(route->neigh->address),
             nexthop ? " nexthop " : "",
             nexthop ? format_address(nexthop) : "",
@@ -1096,12 +1152,12 @@ dump_route(FILE *out, struct babel_route *route)
 static void
 dump_xroute(FILE *out, struct xroute *xroute)
 {
-    fprintf(out, "%s%s%s metric %d (exported)\n",
+    fprintf(out, "%s%s%s metric %d expires %d (exported)\n",
             format_prefix(xroute->prefix, xroute->plen),
             xroute->src_plen > 0 ? " from " : "",
             xroute->src_plen > 0 ?
             format_prefix(xroute->src_prefix, xroute->src_plen) : "",
-            xroute->metric);
+            xroute->metric, xroute->expires);
 }
 
 static void

@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -37,6 +38,20 @@ THE SOFTWARE.
 
 #include "babeld.h"
 #include "util.h"
+
+const unsigned char v4prefix[16] =
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
+
+const unsigned char llprefix[16] =
+    {0xFE, 0x80};
+
+// FIXME: is this correct? There's an IN_* macro for this
+// also we need to mask out all variants of localhost, I think.
+
+const unsigned char v4local[16] =
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 127, 0, 0, 1 };
+
+// FIXME: I worry about someone trying to inject multicast into the protocol
 
 int
 roughly(int value)
@@ -62,26 +77,6 @@ timeval_minus(struct timeval *d,
     }
 }
 
-unsigned
-timeval_minus_msec(const struct timeval *s1, const struct timeval *s2)
-{
-    if(s1->tv_sec < s2->tv_sec)
-        return 0;
-
-    /* Avoid overflow. */
-    if(s1->tv_sec - s2->tv_sec > 2000000)
-        return 2000000000;
-
-    if(s1->tv_sec > s2->tv_sec)
-        return
-            (unsigned)((unsigned)(s1->tv_sec - s2->tv_sec) * 1000 +
-                       ((int)s1->tv_usec - s2->tv_usec) / 1000);
-
-    if(s1->tv_usec <= s2->tv_usec)
-        return 0;
-
-    return (unsigned)(s1->tv_usec - s2->tv_usec) / 1000u;
-}
 
 void
 timeval_add_msec(struct timeval *d, const struct timeval *s, int msecs)
@@ -215,6 +210,8 @@ in_prefix(const unsigned char *restrict address,
 {
     unsigned char m;
 
+    // FIXME: Why can plen ever be > 128?
+    
     if(plen > 128)
         plen = 128;
 
@@ -233,10 +230,13 @@ unsigned char *
 normalize_prefix(unsigned char *restrict ret,
                  const unsigned char *restrict prefix, unsigned char plen)
 {
+
     if(plen >= 128) {
         memcpy(ret, prefix, 16);
         return ret;
     }
+
+    // Somehow I am unsure we can zero a reg this way
 
     memset(ret, 0, 16);
     memcpy(ret, prefix, plen / 8);
@@ -245,12 +245,6 @@ normalize_prefix(unsigned char *restrict ret,
             (prefix[plen / 8] & ((0xFF << (8 - (plen % 8))) & 0xFF));
     return ret;
 }
-
-static const unsigned char v4prefix[16] =
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
-
-static const unsigned char llprefix[16] =
-    {0xFE, 0x80};
 
 const char *
 format_address(const unsigned char *address)
@@ -436,36 +430,22 @@ wait_for_fd(int direction, int fd, int msecs)
     return rc;
 }
 
+// FIXME: I really hate the martians
+
 int
 martian_prefix(const unsigned char *prefix, int plen)
 {
-    return
-        (plen >= 8 && prefix[0] == 0xFF) ||
+        if((plen >= 8 && prefix[0] == 0xFF) ||
         (plen >= 10 && prefix[0] == 0xFE && (prefix[1] & 0xC0) == 0x80) ||
         (plen >= 128 && memcmp(prefix, zeroes, 15) == 0 &&
          (prefix[15] == 0 || prefix[15] == 1)) ||
         (plen >= 96 && v4mapped(prefix) &&
          ((plen >= 104 && (prefix[12] == 127 || prefix[12] == 0)) ||
-          (plen >= 100 && (prefix[12] & 0xE0) == 0xE0)));
-}
-
-int
-linklocal(const unsigned char *address)
-{
-    return memcmp(address, llprefix, 8) == 0;
-}
-
-int
-v4mapped(const unsigned char *address)
-{
-    return memcmp(address, v4prefix, 12) == 0;
-}
-
-void
-v4tov6(unsigned char *dst, const unsigned char *src)
-{
-    memcpy(dst, v4prefix, 12);
-    memcpy(dst + 12, src, 4);
+          (plen >= 100 && (prefix[12] & 0xE0) == 0xE0)))) {
+	fprintf(stderr,"Martian Prefix %s\n", format_prefix(prefix,plen));
+	return 1;
+	}
+	return 0;
 }
 
 int
@@ -490,29 +470,3 @@ daemonise()
     return 1;
 }
 
-enum prefix_status
-prefix_cmp(const unsigned char *p1, unsigned char plen1,
-           const unsigned char *p2, unsigned char plen2)
-{
-    int plen = MIN(plen1, plen2);
-
-    if(v4mapped(p1) != v4mapped(p2))
-        return PST_DISJOINT;
-
-    if(memcmp(p1, p2, plen / 8) != 0)
-        return PST_DISJOINT;
-
-    if(plen % 8 != 0) {
-        int i = plen / 8 + 1;
-        unsigned char mask = (0xFF << (plen % 8)) & 0xFF;
-        if((p1[i] & mask) != (p2[i] & mask))
-            return PST_DISJOINT;
-    }
-
-    if(plen1 < plen2)
-        return PST_LESS_SPECIFIC;
-    else if(plen1 > plen2)
-        return PST_MORE_SPECIFIC;
-    else
-        return PST_EQUALS;
-}

@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <netinet/in.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -173,6 +174,7 @@ check_interface_ipv4(struct interface *ifp)
     if(rc > 0) {
         if(!ifp->ipv4 || memcmp(ipv4, ifp->ipv4, 4) != 0) {
             debugf("Noticed IPv4 change for %s.\n", ifp->name);
+//  This strikes me as too aggressive - we should just flush ipv4 routes
             flush_interface_routes(ifp, 0);
             if(!ifp->ipv4)
                 ifp->ipv4 = malloc(4);
@@ -237,6 +239,19 @@ check_link_local_addresses(struct interface *ifp)
             ifp->numll = 0;
             ifp->ll = NULL;
         }
+	/* If we have a ipv4 address, flush that too to confuse babel less */
+
+	/* Hmm. This might be too agressive. Or we should be listening for
+           the netlink message for address assignment harder */
+
+        if(ifp->ipv4) {
+            debugf("Lost ipv6 link local must wipe ipv4 also for %s.\n",
+		    ifp->name);
+            flush_interface_routes(ifp, 0);
+            free(ifp->ipv4);
+            ifp->ipv4 = NULL;
+        }
+        ifp->flags &= ~IF_UP;
         local_notify_interface(ifp, LOCAL_CHANGE);
         /* Most probably DAD hasn't finished yet.  Reschedule us
            real soon. */
@@ -247,7 +262,7 @@ check_link_local_addresses(struct interface *ifp)
         if(rc == ifp->numll) {
             changed = 0;
             for(i = 0; i < rc; i++) {
-                if(memcmp(ifp->ll[i], ll[i].prefix, 16) != 0) {
+                if(v6_nequal(ifp->ll[i], ll[i].prefix)) {
                     changed = 1;
                     break;
                 }
@@ -273,6 +288,27 @@ check_link_local_addresses(struct interface *ifp)
 
     return 0;
 }
+
+/* We are compute or network bound in some way and taking too
+   long to work. Tell the world we're not going to talk to it as much.
+
+modify_update_interval() {
+
+// Maybe do different things for wireless than wired
+// If number listeners is high - I was seeing an explosion
+// across the net
+
+        if(type == IF_TYPE_WIRELESS)
+            ifp->hello_interval *= 2; // default_wireless_hello_interval;
+        else
+            ifp->hello_interval *= 2; // default_wired_hello_interval;
+
+        ifp->update_interval *= 2;
+
+	// then make sure that goes out soon.
+}
+
+*/
 
 int
 interface_up(struct interface *ifp, int up)
@@ -428,7 +464,7 @@ interface_up(struct interface *ifp, int up)
         else if(type == IF_TYPE_TUNNEL)
             ifp->flags |= IF_TIMESTAMPS;
         else
-            ifp->flags &= ~IF_TIMESTAMPS;
+            ifp->flags |= IF_TIMESTAMPS;
         if(ifp->max_rtt_penalty > 0 && !(ifp->flags & IF_TIMESTAMPS))
             fprintf(stderr,
                     "Warning: max_rtt_penalty is set "
@@ -516,7 +552,7 @@ interface_ll_address(struct interface *ifp, const unsigned char *address)
         return 0;
 
     for(i = 0; i < ifp->numll; i++)
-        if(memcmp(ifp->ll[i], address, 16) == 0)
+        if(v6_equal(ifp->ll[i], address))
             return 1;
 
     return 0;

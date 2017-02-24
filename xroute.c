@@ -27,14 +27,15 @@ THE SOFTWARE.
 #include <assert.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "kernel.h"
+#include "util.h"
 #include "neighbour.h"
 #include "message.h"
 #include "route.h"
 #include "xroute.h"
-#include "util.h"
 #include "configuration.h"
 #include "interface.h"
 #include "local.h"
@@ -42,20 +43,56 @@ THE SOFTWARE.
 static struct xroute *xroutes;
 static int numxroutes = 0, maxxroutes = 0;
 
+#ifdef HAVE_NEON
 struct xroute *
 find_xroute(const unsigned char *prefix, unsigned char plen,
             const unsigned char *src_prefix, unsigned char src_plen)
 {
     int i;
+    // FIXME: My grumpy evaluation of the NEON CSE code
+    // is that we end up reloading the relatively static
+    // prefix and src_prefix every time, I think
+    // We can also put a prefetch here. 
+    // This version also keeps more work in the neon unit
+    // by using the local orr of the two vars, and the
+    // compiler smartly reschedules around the load and
+    // skips the NEON compare and save entirely if plen or src_plen
+    // Smart compiler!
+
+     uint32x4_t up1 = vld1q_u32((const unsigned int *) prefix);
+     uint32x4_t up2 = vld1q_u32((const unsigned int *) src_prefix);
+
+// Shouldn't I just be able to select any max value from any lane?
+// That lets me skip an orr with a reinterpret_cast
+
     for(i = 0; i < numxroutes; i++) {
+	__builtin_prefetch(&xroutes[i+1].prefix,0,2);
+	uint32x4_t p1 = vld1q_u32((const unsigned int *) &xroutes[i].prefix);
+	uint32x4_t p2 = vld1q_u32((const unsigned int *) &xroutes[i].src_prefix);
         if(xroutes[i].plen == plen &&
-           memcmp(xroutes[i].prefix, prefix, 16) == 0 &&
-           xroutes[i].src_plen == src_plen &&
-           memcmp(xroutes[i].src_prefix, src_prefix, 16) == 0)
+		xroutes[i].src_plen == src_plen &&
+		!is_not_zero(vorrq_u32(veorq_u32(p2,up2),veorq_u32(p1,up1))))
             return &xroutes[i];
     }
     return NULL;
 }
+#else
+struct xroute *
+find_xroute(const unsigned char *prefix, unsigned char plen,
+            const unsigned char *src_prefix, unsigned char src_plen)
+{
+    int i;
+
+    for(i = 0; i < numxroutes; i++) {
+        if(xroutes[i].plen == plen &&
+           v6_equal(xroutes[i].prefix, prefix) &&
+           xroutes[i].src_plen == src_plen &&
+           v6_equal(xroutes[i].src_prefix, src_prefix) )
+            return &xroutes[i];
+    }
+    return NULL;
+}
+#endif
 
 void
 flush_xroute(struct xroute *xroute)
@@ -138,10 +175,10 @@ struct
 xroute_stream *
 xroute_stream()
 {
-    struct xroute_stream *stream = calloc(1, sizeof(struct xroute_stream));
+    struct xroute_stream *stream = malloc(sizeof(struct xroute_stream));
     if(stream == NULL)
         return NULL;
-
+    stream->index = 0;
     return stream;
 }
 
@@ -229,6 +266,18 @@ filter_address(struct kernel_addr *addr, void *data) {
 
 /* ifindex is 0 for all interfaces.  ll indicates whether we are
    interested in link-local or global addresses. */
+
+/* FIXME: Now (Linux 4.x) that we have noprefix addresses, and we're
+   using babel, we could try and make sure all addresses
+   have noprefix attached to them so the kernel stops doing
+   too much work for us.
+
+   Also it would be nice to have a filter that would not
+   announce certain kinds of addresses - notably addresses
+   in a temp or dad state.
+
+*/
+
 int
 kernel_addresses(int ifindex, int ll, struct kernel_route *routes,
                  int maxroutes)
@@ -252,12 +301,13 @@ check_xroutes(int send_updates)
     struct filter_result filter_result = {0};
     int numroutes, numaddresses;
     static int maxroutes = 8;
+    // FIXME: Does this limit us to 64k routes?
     const int maxmaxroutes = 16 * 1024;
 
     debugf("\nChecking kernel routes.\n");
 
  again:
-    routes = calloc(maxroutes, sizeof(struct kernel_route));
+    routes = malloc(maxroutes * sizeof(struct kernel_route));
     if(routes == NULL)
         return -1;
 
@@ -301,6 +351,7 @@ check_xroutes(int send_updates)
     /* Check for any routes that need to be flushed */
 
     i = 0;
+    // FIXME: this bubble sort could be smarter
     while(i < numxroutes) {
         export = 0;
         metric = redistribute_filter(xroutes[i].prefix, xroutes[i].plen,
@@ -310,7 +361,7 @@ check_xroutes(int send_updates)
         if(metric < INFINITY && metric == xroutes[i].metric) {
             for(j = 0; j < numroutes; j++) {
                 if(xroutes[i].plen == routes[j].plen &&
-                   memcmp(xroutes[i].prefix, routes[j].prefix, 16) == 0 &&
+                   v6_equal(xroutes[i].prefix, routes[j].prefix) &&
                    xroutes[i].ifindex == routes[j].ifindex &&
                    xroutes[i].proto == routes[j].proto) {
                     export = 1;
@@ -380,6 +431,6 @@ check_xroutes(int send_updates)
     free(routes);
     if(maxroutes >= maxmaxroutes)
         return -1;
-    maxroutes = MIN(maxmaxroutes, 2 * maxroutes);
+    maxroutes = MIN(maxmaxroutes, 4 * maxroutes);
     goto again;
 }

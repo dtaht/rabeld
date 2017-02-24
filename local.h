@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_LOCAL
+#define _BABEL_LOCAL
 
 struct neighbour;
 struct babel_route;
@@ -35,8 +37,8 @@ struct xroute;
 #define LOCAL_BUFSIZE 1024
 
 struct local_socket {
-    int fd;
     char *buf;
+    int fd;
     int n;
     int monitor;
 };
@@ -55,3 +57,4 @@ int local_read(struct local_socket *s);
 int local_header(struct local_socket *s);
 struct local_socket *local_socket_create(int fd);
 void local_socket_destroy(int i);
+#endif

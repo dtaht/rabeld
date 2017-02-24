@@ -19,6 +19,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
+#ifndef _BABEL_BABELD
+#define _BABEL_BABELD
+#include <unistd.h>
 
 #define INFINITY ((unsigned short)(~0))
 
@@ -44,6 +47,7 @@ THE SOFTWARE.
 #define restrict /**/
 #endif
 #else
+#error "I don't recognize this c compiler"
 #define inline /**/
 #define restrict /**/
 #endif
@@ -92,7 +96,7 @@ extern const char *logfile, *pidfile, *state_file;
 extern int link_detect;
 extern int all_wireless;
 extern int has_ipv6_subtrees;
-
+extern volatile sig_atomic_t majortimeout;
 extern unsigned char myid[8];
 extern int have_id;
 
@@ -110,3 +114,5 @@ void schedule_neighbours_check(int msecs, int override);
 void schedule_interfaces_check(int msecs, int override);
 int resize_receive_buffer(int size);
 int reopen_logfile(void);
+
+#endif

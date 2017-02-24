@@ -34,10 +34,17 @@ THE SOFTWARE.
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <sched.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
 #include "net.h"
+
+const int ds = 0x02;        /* ECN without  */
+const int ds_urgent = 0xc2;        /* ECN without  */
+const int ds_lossy = 0x00;
+const int ds_urgent_lossy = 0xc0;
 
 int
 babel_socket(int port)
@@ -46,7 +53,6 @@ babel_socket(int port)
     int s, rc;
     int saved_errno;
     int one = 1, zero = 0;
-    const int ds = 0x02;        /* ECN without  */
 
     s = socket(PF_INET6, SOCK_DGRAM, 0);
     if(s < 0)
@@ -131,6 +137,8 @@ babel_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen)
     msg.msg_iov = &iovec;
     msg.msg_iovlen = 1;
 
+    // Fixme - no error checking here!
+
     rc = recvmsg(s, &msg, 0);
     return rc;
 }
@@ -156,24 +164,38 @@ babel_send(int s,
 
     /* The Linux kernel can apparently keep returning EAGAIN indefinitely. */
 
- again:
-    rc = sendmsg(s, &msg, 0);
-    if(rc < 0) {
-        if(errno == EINTR) {
-            count++;
-            if(count < 100)
-                goto again;
-        } else if(errno == EAGAIN) {
-            int rc2;
-            rc2 = wait_for_fd(1, s, 5);
-            if(rc2 > 0) {
-                count++;
-                if(count < 100)
-                    goto again;
-            }
-            errno = EAGAIN;
+    // sendmsg can return far more than EAGAIN/INTR - ENOBUFS for example!
+    // The former version of this routine could stall for 500ms
+    // but the waitforfd idea remains better in many respects...
+    // but ultimately I'd kind of like to thread this stuff
+
+/* FIXME: when an interface goes up and down,
+
+we get:
+sendmsg: kernel returned unknown error
+: Cannot assign requested address
+sendmsg: kernel returned unknown error
+
+Which turns out to be the undocumented EADDRNOTAVAIL!
+*/
+
+
+    do {
+        rc = sendmsg(s, &msg, 0);
+        if(rc < 0) {
+	    count++;
+	    switch(errno) {
+	    case EINTR: continue;
+	    case ENOBUFS: fprintf(stderr,"Wow, enobufs is feasible!\n");
+	    case EAGAIN: sched_yield(); wait_for_fd(1,s,5); continue;
+	    case ENETDOWN: // this could just be a temporary error during dad?
+	    case EADDRNOTAVAIL: count = 10; break; // we lost our interface
+	    default: perror("sendmsg: kernel returned unknown error\n");
+		    continue;
+	    }
         }
     }
+    while(rc < 0 && count < 10);
     return rc;
 }
 

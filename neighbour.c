@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <sys/time.h>
 #include <time.h>
 #include <assert.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -44,7 +45,7 @@ find_neighbour_nocreate(const unsigned char *address, struct interface *ifp)
 {
     struct neighbour *neigh;
     FOR_ALL_NEIGHBOURS(neigh) {
-        if(memcmp(address, neigh->address, 16) == 0 &&
+        if(v6_equal(address, neigh->address) &&
            neigh->ifp == ifp)
             return neigh;
     }
@@ -140,9 +141,15 @@ update_neighbour(struct neighbour *neigh, int hello, int hello_interval)
                     neigh->reach <<= -missed_hellos;
                     missed_hellos = 0;
                 } else {
-                    /* Late hello.  Probably due to the link layer buffering
-                       packets during a link outage.  Ignore it, but reset
-                       the expected seqno. */
+                    /* Late hello. Probably due to the link layer buffering
+                       packets during a link outage or overload. Ignore it, but
+                       reset the expected seqno. */
+		    /* FIXME: An overbuffered neighbor should get its metric
+                              bumped up so someone else can take the load off.
+                              This msg should also print the delay here. */
+			fprintf(stderr,
+			"Late hello: bufferbloated neighbor %s\n",
+			format_address(neigh->address));
                     neigh->hello_seqno = hello;
                     hello = -1;
                     missed_hellos = 0;
@@ -351,8 +358,3 @@ neighbour_cost(struct neighbour *neigh)
     return MIN(cost, INFINITY);
 }
 
-int
-valid_rtt(struct neighbour *neigh)
-{
-    return (timeval_minus_msec(&now, &neigh->rtt_time) < 180000) ? 1 : 0;
-}

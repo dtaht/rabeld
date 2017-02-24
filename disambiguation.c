@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <errno.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -35,11 +36,12 @@ THE SOFTWARE.
 #include "source.h"
 #include "neighbour.h"
 #include "rule.h"
+#include "disambiguation.h"
 
 struct zone {
     const unsigned char *dst_prefix;
-    unsigned char dst_plen;
     const unsigned char *src_prefix;
+    unsigned char dst_plen;
     unsigned char src_plen;
 };
 
@@ -133,9 +135,9 @@ static int
 zone_equal(const struct zone *z1, const struct zone *z2)
 {
     return z1 && z2 && z1->dst_plen == z2->dst_plen &&
-        memcmp(z1->dst_prefix, z2->dst_prefix, 16) == 0 &&
+        v6_equal(z1->dst_prefix, z2->dst_prefix) &&
         z1->src_plen == z2->src_plen &&
-        memcmp(z1->src_prefix, z2->src_prefix, 16) == 0;
+        v6_equal(z1->src_prefix, z2->src_prefix) ;
 }
 
 static const struct babel_route *
@@ -155,7 +157,7 @@ min_conflict(const struct zone *zone, const struct babel_route *rt)
         if(rt1 == NULL) break;
         if(!(conflicts(rt, rt1) &&
              zone_equal(inter(rt, rt1, &curr_zone), zone)))
-            continue;
+             continue;
         min = min_route(rt1, min);
     }
     route_stream_done(stream);
