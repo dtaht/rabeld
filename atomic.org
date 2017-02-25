@@ -1,3 +1,57 @@
+* I was low on sleep when I wrote this the first time
+
+
+** I also apparently wrote the same data twice (copy/paste error) to 
+netlink for no good reason. 
+
+** But: 
+shifting things to KERNEL_INFINITY as we have always have introduces
+confusion. All we need to do is send the rtm->rtm_type as unreach
+and not send the rest. I think. 
+
+unreachable fc99::/64 dev lo  metric 1024  error -113 pref medium
+
+ip -6 route replace will then change that. 
+
+I think, but am not sure, that going to kernel_infinity was pointless,
+although it did no harm un less you tried to switch routes to another device.
+
+In that case you could end up in this invalid state:
+
+ref medium
+root@nemesis:~/Downloads# ip -6 route replace fc99::/64 dev wlp3s0  metric 1024
+root@nemesis:~/Downloads# ip -6 route | grep fc99
+fc99::/64 dev wlp3s0  metric 1024 linkdown  pref medium
+unreachable fc99::/64 dev lo  metric 2049  error -113 pref medium
+
+Where if you just keep the metric at the default, you can switch
+between unreach and reach all day. This works... for ipv6 only.
+
+I wonder how many times delete stuff in the first place...
+
+This should not have got delted in the first place - and it's a ::/22????
+
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+
+But, as I said, this patch doesn't work with v4 apparently.
+
 * Anyway, I really, really, really don't want to poke into the chip's wifi
 
 Totally burnt on kernel development. However poking into wpa_supplicant seems
