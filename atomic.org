@@ -27,9 +27,23 @@ unreachable fc99::/64 dev lo  metric 2049  error -113 pref medium
 Where if you just keep the metric at the default, you can switch
 between unreach and reach all day. This works... for ipv6 only.
 
-I wonder how many times delete stuff in the first place...
+** Hit self inflicted calloc bug
+
+and messed up repo. Should not drink and hack. but:
+
+** I wonder how many times delete stuff in the first place...
 
 This should not have got delted in the first place - and it's a ::/22????
+
+This is the machine right next to me. I'd put rabel on it... Hmm. A single
+/128 ends up looking like a crazy ass martian... we stomp on the  plen hard.
+I wonder if there is a pattern to this... cause merely callocing shouldn't
+have done anything but cover up the problem.
+
+fd99::5 from ::ff00:0:0/88 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 from 2400::/7 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+
 
 Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
 fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
@@ -51,6 +65,15 @@ Deleted fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel 
 fd99::5 from ::/22 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
 
 But, as I said, this patch doesn't work with v4 apparently.
+
+** Nor does it work right with v6, either.
+
+Sure seemed like a good idea at the time.
+
+fd99::2 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::5 via fe80::230:18ff:fec9:de9b dev enp2s0  proto babel  metric 1024  pref medium
+fd99::61 via fe80::f6f2:6dff:feb6:a01d dev enp2s0  proto babel  metric 1024  pref medium
+unreachable fd99::61 dev lo  proto babel  metric 1024  error -113 pref medium
 
 * Anyway, I really, really, really don't want to poke into the chip's wifi
 
