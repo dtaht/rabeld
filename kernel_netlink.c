@@ -1242,13 +1242,10 @@ kernel_route(int operation, int table,
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
 
-#ifdef NETLINK_DEBUG
     if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
-#endif
-    rc = netlink_talk(&buf.nh);
 
-#ifdef NETLINK_DEBUG
+    rc = netlink_talk(&buf.nh);
 
     if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
@@ -1256,6 +1253,7 @@ kernel_route(int operation, int table,
 		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
     if(metric >= KERNEL_INFINITY && rtm->rtm_type != RTN_UNREACHABLE )
 		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
+
     if(rc != 0) {
 	    fprintf(stderr,"failed kernel_route: %s %s from %s "
             "table %d metric %d dev %d via %s\n",
@@ -1274,7 +1272,6 @@ kernel_route(int operation, int table,
             newtable, newmetric, newifindex, format_address(newgate));
 	    }
     }
-#endif 
     return rc;
 
 }
@@ -1335,7 +1332,6 @@ kernel_route(int operation, int table,
 	    // clear out the old route
 	    // Going from infinite to normal
 	    // going from normal to infinite
-#ifdef NETLINK_DEBUG
 	    if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
 	             rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
@@ -1343,7 +1339,6 @@ kernel_route(int operation, int table,
                      NULL, 0, 0, 0);
                      if(rc!=0) fprintf(stderr,"Flushing infinite route failed\n");
 	    }
-#endif
 	table = newtable;
 	gate = newgate;
 	ifindex = newifindex;
@@ -1387,10 +1382,9 @@ kernel_route(int operation, int table,
     rtm->rtm_scope = RT_SCOPE_UNIVERSE; // FIXME: NOT SURE ABOUT THIS
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
-    else {
+    else
         rtm->rtm_type = RTN_UNREACHABLE;
-	metric = 0; // ?
-    } 
+
     rtm->rtm_protocol = RTPROT_BABEL;
     rtm->rtm_flags |= RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
 
@@ -1417,13 +1411,14 @@ kernel_route(int operation, int table,
     rta = RTA_NEXT(rta, len);
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
-    *(int*)RTA_DATA(rta) = metric;
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    rta->rta_type = RTA_OIF;
-    *(int*)RTA_DATA(rta) = ifindex;
 
-    if(rtm->rtm_type != RTN_UNREACHABLE) {
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
         if(ipv4) {
             rta = RTA_NEXT(rta, len);
             rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
@@ -1435,7 +1430,10 @@ kernel_route(int operation, int table,
             rta->rta_type = RTA_GATEWAY;
             memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
         }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
     }
+
 //    PERHAPS one day push babel routes as expiring into the
 //    the kernel and periodically refresh them. This would
 //    give us a window to crash or restart in without retractions
@@ -1448,9 +1446,39 @@ kernel_route(int operation, int table,
     rta->rta_type = RTA_EXPIRES;
     memcpy(RTA_DATA(rta), &expires, sizeof(int));
 #endif
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
+        }
+    } else {
+        *(int*)RTA_DATA(rta) = -1;
+    }
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
+
     rc = netlink_talk(&buf.nh);
+    if(rtm->rtm_protocol != RTPROT_BABEL)
+		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
     return rc;
 }
 #endif
