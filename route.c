@@ -429,7 +429,7 @@ route_stream_next(struct route_stream *stream)
     if(stream->installed) {
         while(stream->index < route_slots) {
 	// this might go boom in some rare cases
-	//  __builtin_prefetch(routes[stream->index+1],0,1)
+	__builtin_prefetch(routes[stream->index],0,1);
             if(stream->installed == ROUTE_SS_INSTALLED &&
                routes[stream->index]->src->src_plen == 0)
                 return NULL;

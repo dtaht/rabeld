@@ -155,6 +155,9 @@ min_conflict(const struct zone *zone, const struct babel_route *rt)
     while(1) {
         rt1 = route_stream_next(stream);
         if(rt1 == NULL) break;
+        __builtin_prefetch(rt1->src,0,1);
+        __builtin_prefetch(rt->src,0,1);
+
         if(!(conflicts(rt, rt1) &&
              zone_equal(inter(rt, rt1, &curr_zone), zone)))
              continue;

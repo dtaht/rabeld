@@ -2,7 +2,7 @@
 # Run test for 300 seconds
 HOST=`hostname`
 EXPIRES=600
-END=512
+END=2500
 IFACE=babel0
 PROTO=8 # reuse gated for this sort of testing
 PLEN=64 # FIXME: a good idea to start testing variable length prefixes too
@@ -51,7 +51,7 @@ for i in `seq 1 $END`
 do
 local E2=`printf %x ${i}`
 #E2=`printf ${W1,0:(-4)}:${W1,0:(-4)}` # ${W1,0:4}`
-ip -6 route add ${PREFIX}${E2}::/$PLEN dev $IFACE proto $PROTO expires $EXPIRES
+ip -6 route add ${PREFIX}${E2}::/$PLEN dev $IFACE proto $PROTO #expires $EXPIRES
 done
 }
 
