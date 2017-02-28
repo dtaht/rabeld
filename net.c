@@ -53,7 +53,7 @@ babel_socket(int port)
     int s, rc;
     int saved_errno;
     int one = 1, zero = 0;
-
+    const int rcvsize = (16 * 1024);
     s = socket(PF_INET6, SOCK_DGRAM, 0);
     if(s < 0)
         return -1;
@@ -80,6 +80,18 @@ babel_socket(int port)
                     &one, sizeof(one));
     if(rc < 0)
         goto fail;
+
+    rc = setsockopt(s, SOL_SOCKET, SO_SNDBUF,
+                        &rcvsize, sizeof(rcvsize));
+    if(rc < 0) {
+         perror("setsockopt(SO_SNDBUF)");
+    }
+
+    rc = setsockopt(s, SOL_SOCKET, SO_RCVBUF,
+                        &rcvsize, sizeof(rcvsize));
+    if(rc < 0) {
+         perror("setsockopt(SO_SNDBUF)");
+    }
 
 #ifdef IPV6_TCLASS
     rc = setsockopt(s, IPPROTO_IPV6, IPV6_TCLASS, &ds, sizeof(ds));
