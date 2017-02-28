@@ -1,3 +1,28 @@
+* OK, it is obvious I should go write tests 
+
+if I'm going to muck with major internals.
+Moved those to the libv6 repo.
+
+I want to go back to optimizing atomic route changes only.
+I tackled way too much and got too distracted by the neon stuff.
+
+I am also still chasing what i think is a netlink bug and a way
+to go at that is with more internal consistency checks in babel.
+
+Back WAY off that and get focused on cleanup.
+
+* Arm endian models
+
+-mcmodel=tiny - code and static data within a mb of each other
+
+* Add atexit
+
+clean up and remove myself better
+
+* Hmm...
+Neighbors can only be 8 bytes in size in the present implementation.
+I think. FE80::whatever. unless link local can be longer?
+
 * I was low on sleep when I wrote this the first time
 
 
