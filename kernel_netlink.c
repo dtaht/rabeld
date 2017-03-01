@@ -1093,9 +1093,9 @@ kernel_route(int operation, int table,
             table, metric, ifindex, format_address(gate));
 
     if(operation == ROUTE_MODIFY) {
-        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
-           newifindex == ifindex)
-            return 0;
+//        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
+//           newifindex == ifindex)
+//            return 0;
 
 	// Hmm. Can we do better on infinity here? Why would the gates
 	// OR ifindex be the same on infinity? They could change...
@@ -1111,7 +1111,8 @@ kernel_route(int operation, int table,
         // clear out the old route
         // Going from infinite to normal
         // going from normal to infinite
-            if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
+
+	if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
                      rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
                      src, src_plen,
                      gate, ifindex, metric,
@@ -1257,12 +1258,40 @@ kernel_route(int operation, int table,
 //    and also let us chew up compute. On the other hand, we
 //    end up writing stuff to the kernel more often to refresh it.
 
+   /* 
 #ifdef HAVE_EXPIRES
     rta = RTA_NEXT(rta, len);
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_EXPIRES;
     memcpy(RTA_DATA(rta), &expires, sizeof(int));
 #endif
+
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_PRIORITY;
+
+    if(metric < KERNEL_INFINITY) {
+        *(int*)RTA_DATA(rta) = metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
+        if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
+        } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
+        }
+    } else {
+       *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
+    }
+*/
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
     if(rtm->rtm_protocol != RTPROT_BABEL)

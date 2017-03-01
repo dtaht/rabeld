@@ -1,3 +1,19 @@
+* I reverted all the way back to 4451fddeee8e2920481097bee91e28a866f99014
+
+which had what I thought was the "extra" magic gateway setup in it.
+
+And that worked.
+
+As did regular babeld.
+
+As not did this version.
+
+So I added what I thought was the only extra part to it from that.
+
+And that failed completely.
+
+I should have quit hours ago. We're well past thinko time.
+
 * Nope, this version breaks ipv4 thoroughly.
 
 Was it merely a matter of luck?
