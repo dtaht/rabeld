@@ -1,3 +1,84 @@
+iproute.c:		if ((r->rtm_scope != RT_SCOPE_UNIVERSE || show_details > 0) && filter.scopemask != -1)
+iproute.c:			fprintf(fp, "scope %s ", rtnl_rtscope_n2a(r->rtm_scope, b1, sizeof(b1)));
+iproute.c:		.r.rtm_scope = RT_SCOPE_NOWHERE,
+iproute.c:		req.r.rtm_scope = RT_SCOPE_UNIVERSE;
+iproute.c:			req.r.rtm_scope = scope;
+iproute.c:			req.r.rtm_scope = RT_SCOPE_UNIVERSE;
+iproute.c:			req.r.rtm_scope = RT_SCOPE_HOST;
+iproute.c:			req.r.rtm_scope = RT_SCOPE_LINK;
+iproute.c:				req.r.rtm_scope = RT_SCOPE_NOWHERE;
+iproute.c:				req.r.rtm_scope = RT_SCOPE_LINK;
+iprule.c:		.r.rtm_scope = RT_SCOPE_UNIVERSE,
+
+        if (!scope_ok) {
+                if (req.r.rtm_family == AF_INET6 ||
+                    req.r.rtm_family == AF_MPLS)
+                        req.r.rtm_scope = RT_SCOPE_UNIVERSE;
+                else if (req.r.rtm_type == RTN_LOCAL ||
+                         req.r.rtm_type == RTN_NAT)
+                        req.r.rtm_scope = RT_SCOPE_HOST;
+                else if (req.r.rtm_type == RTN_BROADCAST ||
+                         req.r.rtm_type == RTN_MULTICAST ||
+                         req.r.rtm_type == RTN_ANYCAST)
+                        req.r.rtm_scope = RT_SCOPE_LINK;
+                else if (req.r.rtm_type == RTN_UNICAST ||
+                         req.r.rtm_type == RTN_UNSPEC) {
+                        if (cmd == RTM_DELROUTE)
+                                req.r.rtm_scope = RT_SCOPE_NOWHERE;
+                        else if (!gw_ok && !nhs_ok)
+                                req.r.rtm_scope = RT_SCOPE_LINK;
+                }
+
+
+onlink is not the default for iproute
+
+                        addattr32(&req.n, sizeof(req), RTA_FLOW, realm);
+                } else if (strcmp(*argv, "onlink") == 0) {
+                        req.r.rtm_flags |= RTNH_F_ONLINK;
+                } else if (strcmp(*argv, "nexthop") == 0) {
+
+
+                if (strcmp(*argv, "src") == 0) {
+                        inet_prefix addr;
+
+                        NEXT_ARG();
+                        get_addr(&addr, *argv, req.r.rtm_family);
+                        if (req.r.rtm_family == AF_UNSPEC)
+                                req.r.rtm_family = addr.family;
+                        addattr_l(&req.n, sizeof(req), RTA_PREFSRC, &addr.data, addr.bytelen);
+
+                        get_addr(&addr, *argv, family);
+                        if (req.r.rtm_family == AF_UNSPEC)
+                                req.r.rtm_family = addr.family;
+                        if (addr.family == req.r.rtm_family)
+                                addattr_l(&req.n, sizeof(req), RTA_GATEWAY,
+                                          &addr.data, addr.bytelen);
+                        else
+                                addattr_l(&req.n, sizeof(req), RTA_VIA,
+                                          &addr.family, addr.bytelen+2);
+
+src
+
+
+                        get_prefix(&addr, *argv, req.r.rtm_family);
+                        if (req.r.rtm_family == AF_UNSPEC)
+                                req.r.rtm_family = addr.family;
+                        if (addr.bytelen)
+                                addattr_l(&req.n, sizeof(req), RTA_SRC, &addr.data, addr.bytelen);
+                        req.r.rtm_src_len = addr.bitlen;
+
+
+??? rtm_dst_len?
+
+        if (filter.flushb &&
+            r->rtm_family == AF_INET6 &&
+            r->rtm_dst_len == 0 &&
+            r->rtm_type == RTN_UNREACHABLE &&
+            tb[RTA_PRIORITY] &&
+            *(int *)RTA_DATA(tb[RTA_PRIORITY]) == -1)
+                return 0;
+
+
 * OK, I give up.
 
 Time to look hard at whatever ip route does.

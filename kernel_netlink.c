@@ -1083,16 +1083,6 @@ kernel_route(int operation, int table,
         }
     }
 
-    if(operation == ROUTE_MODIFY) {
-	table = newtable;
-	gate = newgate;
-	ifindex = newifindex;
-	metric = newmetric;
-    }
-
-    ipv4 = v4mapped(gate);
-    use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
-
     kdebugf("kernel_route: %s %s from %s "
             "table %d metric %d dev %d via %s\n",
             operation == ROUTE_ADD ? "add" :
@@ -1101,8 +1091,34 @@ kernel_route(int operation, int table,
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
+    if(operation == ROUTE_MODIFY) {
+	    // Is it possible we are getting a nonsensical anything?
+	    fprintf(stderr,"modify table = %d\n"
+		           "    newtable = %d\n"
+		           "       gate  = %d\n"
+		           "    newgate  = %d\n"
+		           "    ifindex  = %d\n"
+		           " newifindex  = %d\n"
+		           "    metric   = %d\n"
+		    " newmetric   = %d\n",
+		    table, newtable, gate,newgate, ifindex,newifindex,metric,newmetric);
+	table = newtable;
+	gate = newgate;
+	ifindex = newifindex;
+	metric = newmetric;
+    }
+
+    ipv4 = v4mapped(gate);
+    // ?? src_plen of 0 means what?
+    if(src_plen > 127) fprintf(stdout, "Plen = %d WTF\n", src_plen);
+
+    use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
+
     /* Unreachable default routes cause all sort of weird interactions;
        ignore them. FIXME - this is a bug elsewhere */
+
+    // metric never passes 65535. It is an unsigned int above - and a short elsewhere?
+    // And what in the kernel? And wny do we deal with it positive and negative?
 
     if((metric >= KERNEL_INFINITY) &&
 	    (plen == 0 || (ipv4 && plen == 96)))
@@ -1110,10 +1126,11 @@ kernel_route(int operation, int table,
 
     memset(buf.raw, 0, sizeof(buf.raw));
 
+    // The old behavior used NLM_EXCLU and NOT REPLACE
+
     if(operation == ROUTE_FLUSH) {
-	    buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE; // NLM_EXCL?
+	buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE; // NLM_EXCL?
         buf.nh.nlmsg_type = RTM_DELROUTE;
-//	ifindex = 0;
     } else {
         buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_REPLACE;
         buf.nh.nlmsg_type = RTM_NEWROUTE;
@@ -1147,21 +1164,23 @@ kernel_route(int operation, int table,
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
     } else {
+// plen is where?
+	   if(use_src) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_SRC; // check me
+            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
+        }
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
-        if(use_src) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_SRC;
-            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
-        }
     }
 
    fprintf(stderr,"metric is: %d\n", metric);
     // AHAH - metric can be unsigned. So like -2 is?? 
-    if(metric != KERNEL_INFINITY) {
+
+   if(metric != KERNEL_INFINITY) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_PRIORITY;
