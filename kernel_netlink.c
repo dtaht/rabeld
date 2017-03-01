@@ -1045,6 +1045,10 @@ kernel_route(int operation, int table,
     struct rtattr *rta;
     int len = sizeof(buf.raw);
     int rc, ipv4, use_src = 0;
+    // It is not clear how we determine the metric elsewhere for kernel writes
+    int ipv4_metric = 0;
+    int ipv6_metric = 1024;
+    
     // const int expires = 6000;
 
     if(!nl_setup) {
@@ -1187,13 +1191,13 @@ kernel_route(int operation, int table,
             memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
         }
     } else {
-        *(int*)RTA_DATA(rta) = -1;
+	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
     }
 
 //    PERHAPS one day push babel routes as expiring into the
 //    the kernel and periodically refresh them. This would
 //    give us a window to crash or restart in without retractions
-//    and also let us chew up compute. On the other hand, we 
+//    and also let us chew up compute. On the other hand, we
 //    end up writing stuff to the kernel more often to refresh it.
 
 #ifdef HAVE_EXPIRES
@@ -1205,6 +1209,9 @@ kernel_route(int operation, int table,
     rta = RTA_NEXT(rta, len);
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
+
+    // I still feel I was on drugs when I wrote this originally
+    // We're doing the same work, twice... but it worked....
 
     if(metric < KERNEL_INFINITY) {
         *(int*)RTA_DATA(rta) = metric;
@@ -1225,7 +1232,7 @@ kernel_route(int operation, int table,
             memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
         }
     } else {
-        *(int*)RTA_DATA(rta) = -1;
+	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
     }
 
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
