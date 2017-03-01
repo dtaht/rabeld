@@ -1,3 +1,173 @@
+* The "error" certainly seems correct
+
+#define ENETUNREACH     101     /* Network is unreachable */
+#define ENETRESET       102     /* Network dropped connection because of reset */
+#define ECONNABORTED    103     /* Software caused connection abort */
+#define ECONNRESET      104     /* Connection reset by peer */
+#define ENOBUFS         105     /* No buffer space available */
+#define EISCONN         106     /* Transport endpoint is already connected */
+#define ENOTCONN        107     /* Transport endpoint is not connected */
+#define ESHUTDOWN       108     /* Cannot send after transport endpoint shutdown */
+#define ETOOMANYREFS    109     /* Too many references: cannot splice */
+#define ETIMEDOUT       110     /* Connection timed out */
+#define ECONNREFUSED    111     /* Connection refused */
+#define EHOSTDOWN       112     /* Host is down */
+#define EHOSTUNREACH    113     /* No route to host */
+
+But it is perfectly feasible to install an unreachable route without that error
+root@dancer:~/git/rabeld# ip route | grep unreach
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+
+unreachable 172.22.91.23 metric 2048 
+root@dancer:~/git/rabeld# ip route add unreachable 172.22.91.93 proto gated metric 2048
+root@dancer:~/git/rabeld# ip route | grep unreach
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+unreachable 172.22.91.93 proto gated metric 2048
+
+And that's what we want. I think.
+
+
+* Take the interface down
+
+30 seconds go by
+
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+
+... we slide through the unreachable state first ...
+
+
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel onlink 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel onlink 
+unreachable 172.26.96.64 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel onlink 
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+fd99::66 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.66 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.66 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+
+** All these guys stay unreachable for no reason
+
+root@dancer:~/git/rabeld# ip -6 route | grep unreachable
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+
+And we come back up just as confused as we were before.
+
+
+* Still don't understand why the wifi comes up before everything
+else does.
+
+It does the wifi first, then optimizes to get ethernet
+
+* stopping babel leaves these stuck
+
+They may have been stuck earlier.
+
+d@dancer:~/git/libv6/clients/ddpd$ ip -6 route | grep unreach
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+
+** TODO make babel flush all it's routes on the proto number on exit
+and start. Because' nobody's perfect. Especially not me.
+
+* So this version
+short circuits things to just send "unreachable"
+** On start it does the right thing.
+
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+** On a route change...
+I take something down. It takes forever to discover it
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+
+** We pass through this state and spend too much time here
+
+d@dancer:~/git/rabeld$ ip route
+default via 172.26.16.1 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink
+
+** Then we finally get here:
+
+d@dancer:~/git/rabeld$ ip route
+default via 172.26.16.1 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+
+* WTF
+
 unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
 unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
@@ -65,8 +235,127 @@ unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel
 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
 unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
 
+** And then we eventually bring things back to the original
 
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 64802sec hoplimit 64 pref high
 
+** Lets do that again
+
+30 seconds later we pass through unreach again
+
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel onlink 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel onlink 
+unreachable 172.26.96.64 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel onlink 
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.66 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+
+** Then I bring the device back up again...
+
+First thing that came back was the default
+
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+default via 172.26.16.5 dev eno1 proto babel onlink 
+
+Then we waited a while
+
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.96.66 via 172.26.16.5 dev eno1 proto babel onlink 
+fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.96.64 via 172.26.16.5 dev eno1 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+
+And we have a bunch of left over guys here with that 113 and 101 errors
+
+And they are seemingly stuck
+
+d@dancer:~/git/libv6/clients/ddpd$ ip -6 route | grep unreach
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+
+d@dancer:~/git/rabeld$ ip -6 route
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2601:646:4101:a740::/64 dev eno1 proto kernel metric 256  expires 294412sec pref medium
+2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+fdaf:dc63:6de9:8::/64 dev eno1 proto kernel metric 256  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+fe80::/64 dev wlp2s0 proto kernel metric 256  pref medium
+fe80::/64 dev eno1 proto kernel metric 256  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65461sec hoplimit 64 pref high
+
+But ipv4 came back fine
+
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.64 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.66 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
 
 
 * OK transparent infinity now
