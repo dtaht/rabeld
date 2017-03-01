@@ -29,7 +29,6 @@ THE SOFTWARE.
 struct kernel_route {
     unsigned char prefix[16];
     unsigned char src_prefix[16];
-    unsigned char gw[16];
     unsigned char plen; // FIXME: why were these ints?
     unsigned char src_plen; /* no source prefix <=> src_plen == 0 */
     unsigned char proto; // This is an unsigned char in the real world
@@ -37,6 +36,7 @@ struct kernel_route {
 	// So we could go back to a short here - if I wasn't so puzzled about why we
 	// keep having routes end up being static.
     unsigned char pad;
+    unsigned char gw[16];
     int metric;
     unsigned int ifindex;
     int expires;
