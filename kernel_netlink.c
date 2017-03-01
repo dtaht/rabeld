@@ -1386,8 +1386,13 @@ kernel_route(int operation, int table,
         rtm->rtm_type = RTN_UNREACHABLE;
 
     rtm->rtm_protocol = RTPROT_BABEL;
-    rtm->rtm_flags |= RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
+    rtm->rtm_flags &= ~RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
 
+// http://lxr.free-electrons.com/source/net/ipv4/fib_semantics.c#L739
+
+// Also we get ENODEV EINVAL ENETDOWNa
+
+// What is (RTNH_F_PERVASIVE?
     rta = RTM_RTA(rtm);
 
     if(ipv4) {
