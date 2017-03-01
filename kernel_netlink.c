@@ -1084,16 +1084,6 @@ kernel_route(int operation, int table,
     }
 
     if(operation == ROUTE_MODIFY) {
-	    // clear out the old route
-	    // Going from infinite to normal
-	    // going from normal to infinite
-	    if(metric >= KERNEL_INFINITY || newmetric >= KERNEL_INFINITY) {
-	             rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0);
-                     if(rc!=0) fprintf(stderr,"Flushing infinite route failed\n");
-	    }
 	table = newtable;
 	gate = newgate;
 	ifindex = newifindex;
