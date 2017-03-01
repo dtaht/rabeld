@@ -1163,26 +1163,29 @@ kernel_route(int operation, int table,
     rta->rta_len = RTA_LENGTH(sizeof(int));
     rta->rta_type = RTA_PRIORITY;
 
+    if(ipv4) {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
+    } else {
+            rta = RTA_NEXT(rta, len);
+            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+            rta->rta_type = RTA_GATEWAY;
+            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
+    }
+
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+
     if(metric < KERNEL_INFINITY) {
         *(int*)RTA_DATA(rta) = metric;
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_OIF;
         *(int*)RTA_DATA(rta) = ifindex;
-
-        if(ipv4) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
-        } else {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
-        }
     } else {
-	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
+        *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
     }
     // When going to infinity this is all we need. Probably. Adding
     // more confuses things

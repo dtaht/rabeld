@@ -1,3 +1,127 @@
+* So this time
+
+I'm not sending an oif to go unreach.
+
+Maybe I should specify unspec.
+
+** Everything comes up clean
+
+d@dancer:~/git/rabeld$ ip -6 route | grep from
+default from 2601:646:4101:a740::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+d@dancer:~/git/rabeld$ ip -6 route | grep from
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+I still will never understand why wifi comes up first
+
+** Still a losing battle with ra
+
+d@dancer:~/git/rabeld$ ip -6 route
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2601:646:4101:a740::/64 dev eno1 proto kernel metric 256  expires 292707sec pref medium
+2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fdaf:dc63:6de9:8::/64 dev eno1 proto kernel metric 256  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fe80::/64 dev wlp2s0 proto kernel metric 256  pref medium
+fe80::/64 dev eno1 proto kernel metric 256  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65478sec hoplimit 64 pref high
+
+** We take the other side down, wait 30 sec:
+
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::66 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+
+We're stuck with these guys
+
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+
+d@dancer:~/git/rabeld$ sleep 30
+
+And we've got both unreach and reach with the same metric. Which 
+I didn't think was possible.
+
+d@dancer:~/git/rabeld$ ip -6 route | grep unreach
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+d@dancer:~/git/rabeld$ ip -6 route
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2601:646:4101:a740::/64 dev eno1 proto kernel metric 256  expires 292544sec pref medium
+2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2602:24c:61be:86e0::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd55::/64 dev lo proto 44 metric 1024  error -101 pref medium
+fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+unreachable fd88::/64 dev lo metric 1024  error -101 pref medium
+unreachable fd99::3 dev lo proto gated metric 1024  error -101 pref medium
+fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+fdaf:dc63:6de9:8::/64 dev eno1 proto kernel metric 256  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+fe80::/64 dev wlp2s0 proto kernel metric 256  pref medium
+fe80::/64 dev eno1 proto kernel metric 256  pref medium
+default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024  expires 65315sec hoplimit 64 pref high
+
+
 * The "error" certainly seems correct
 
 #define ENETUNREACH     101     /* Network is unreachable */
