@@ -655,6 +655,10 @@ rtnlgrp_to_mask(unsigned int grp)
    caused by our actions on the command socket
  */
 
+// FIXME: We can do better here with the output of tcpdump at hand
+// Can filter out everything we are listening to including interface
+// Events. 
+
 static void netlink_install_filter (int sock, __u32 pid)
 {
   struct sock_filter filter[] = {
@@ -888,6 +892,8 @@ isbatman(const char *ifname, int ifindex)
     return 0;
 }
 
+// FIXME: Wifi channel detection has been borken for a very, very long time.
+
 int
 kernel_interface_wireless(const char *ifname, int ifindex)
 {
@@ -1025,261 +1031,6 @@ void print_failed_netlink(char *s, int operation, int table, int metric, int dev
 // otherwise add/del uses the first parameters only
 
 const int iflo = 0; // fixme find this
-
-#if 0
-#error don't build this'
-int
-kernel_route(int operation, int table,
-             const unsigned char *dest, unsigned short plen,
-             const unsigned char *src, unsigned short src_plen,
-             const unsigned char *gate, int ifindex, unsigned int metric,
-             const unsigned char *newgate, int newifindex,
-             unsigned int newmetric, int newtable)
-{
-    union { char raw[4096]; struct nlmsghdr nh; } buf;
-    struct rtmsg *rtm;
-    struct rtattr *rta;
-    int len = sizeof(buf.raw);
-    int rc, ipv4, use_src = 0;
-
-    if(!nl_setup) {
-        fprintf(stderr,"kernel_route: netlink not initialized.\n");
-        errno = EIO;
-        return -1;
-    }
-
-    /* if the socket has been closed after an IO error, */
-    /* we try to re-open it. */
-    if(nl_command.sock < 0) {
-        rc = netlink_socket(&nl_command, 0);
-        if(rc < 0) {
-            int olderrno = errno;
-            perror("kernel_route: netlink_socket()");
-            errno = olderrno;
-            return -1;
-        }
-    }
-
-    /* Check that the protocol family is consistent. */
-    if(plen >= 96 && v4mapped(dest)) {
-        if(!v4mapped(gate) ||
-           (src_plen > 0 && (!v4mapped(src) || src_plen < 96))) {
-            errno = EINVAL;
-            return -1;
-        }
-    } else {
-        if(v4mapped(gate)|| (src_plen > 0 && v4mapped(src))) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
-
-    if(operation == ROUTE_MODIFY) {
-        if(newmetric == metric && v6_equal(newgate, gate) &&
-           newifindex == ifindex)
-            return 0;
-        /* It would be better to add the new route before removing the
-           old one, to avoid losing packets.  However, this causes
-           problems with non-multipath kernels, which sometimes
-           silently fail the request, causing "stuck" routes.  Let's
-           stick with the naive approach, and hope that the window is
-           small enough to be negligible. */
-
-        // FIXME if the interface went down there is no
-	// route to flush because the kernel did it for us
-	// A way to deal with this is always have two or more
-	// routes installed in the kernel
-
-        rc = kernel_route(ROUTE_FLUSH, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0);
-
-// this is tarting to get tedious if(!if_indextoname(route->ifindex, ifname))
-
-	if(rc < 0) {
-        perror("flush failed during replace");
-        fprintf(stderr,"failed kernel_route %s during replace: %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" :
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-	}
-        rc = kernel_route(ROUTE_ADD, newtable, dest, plen,
-                          src, src_plen,
-                          newgate, newifindex, newmetric,
-                          NULL, 0, 0, 0);
-        if(rc < 0) {
-         fprintf(stderr,"failed kernel_route add during replace: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" :
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-	    perror("Add failed during replace");
-		if(errno == EEXIST)
-                rc = 1;
-		// FIXME hmm. Way more errors than this are possible
-/*		else rc = kernel_route(ROUTE_ADD, table, dest, plen,
-                     src, src_plen,
-                     gate, ifindex, metric,
-                     NULL, 0, 0, 0); */
-            /* Try to re-install the flushed route on failure.
-               Error handling is hard. */
-        }
-        return rc;
-    }
-
-
-    ipv4 = v4mapped(gate);
-    use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
-
-    kdebugf("kernel_route: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-
-    /* Unreachable default routes cause all sort of weird interactions;
-       where do they come from? */
-
-    if(metric >= KERNEL_INFINITY && (plen == 0 || (ipv4 && plen == 96))) {
-    fprintf(stderr,"unreachable kernel_route: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-	    return 0;
-    }
-
-    memset(buf.raw, 0, sizeof(buf.raw));
-    if(operation == ROUTE_ADD) {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
-        buf.nh.nlmsg_type = RTM_NEWROUTE;
-    } else {
-        buf.nh.nlmsg_flags = NLM_F_REQUEST;
-        buf.nh.nlmsg_type = RTM_DELROUTE;
-    }
-
-    rtm = NLMSG_DATA(&buf.nh);
-    rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
-    rtm->rtm_dst_len = ipv4 ? plen - 96 : plen;
-
-    if(use_src) {
-	    if(ipv4) fprintf(stderr,"BAD: ipv4 using src: %d ????\n", src_plen - 96);
-	    rtm->rtm_src_len = ipv4 ? src_plen - 96 : src_plen;
-    }
-	    rtm->rtm_table = table;
-    rtm->rtm_scope = RT_SCOPE_UNIVERSE;
-
-    if(metric < KERNEL_INFINITY)
-        rtm->rtm_type = RTN_UNICAST;
-    else
-        rtm->rtm_type = RTN_UNREACHABLE;
-    rtm->rtm_protocol = RTPROT_BABEL;
-    // I am not sure why we need ONLINK
-    rtm->rtm_flags |= RTNH_F_ONLINK;
-
-    rta = RTM_RTA(rtm);
-
-// strongly implies a netlink bug
-
-    if(ipv4) {
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
-        if(use_src) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-            rta->rta_type = RTA_SRC;
-            memcpy(RTA_DATA(rta), src + 12, sizeof(struct in_addr));
-        }
-    } else {
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
-        if(use_src) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_SRC;
-            memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
-        }
-    }
-
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    rta->rta_type = RTA_PRIORITY;
-
-    if(metric < KERNEL_INFINITY) {
-        *(int*)RTA_DATA(rta) = metric;
-
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(int));
-        rta->rta_type = RTA_OIF;
-        *(int*)RTA_DATA(rta) = ifindex;
-
-        if(ipv4) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
-        } else {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
-        }
-    } else {
-        *(int*)RTA_DATA(rta) = -1;
-    }
-
-    buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
-
-    if(rtm->rtm_protocol != RTPROT_BABEL)
-		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
-
-    rc = netlink_talk(&buf.nh);
-
-    if(rtm->rtm_protocol != RTPROT_BABEL)
-		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
-    if(metric < KERNEL_INFINITY && rtm->rtm_type != RTN_UNICAST )
-		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
-    if(metric >= KERNEL_INFINITY && rtm->rtm_type != RTN_UNREACHABLE )
-		fprintf(stderr,"Netlink scribbled on rtm_type!!!\n");
-
-    if(rc != 0) {
-	    fprintf(stderr,"failed kernel_route: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" :
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            table, metric, ifindex, format_address(gate));
-	    if(operation == ROUTE_MODIFY) {
-	    fprintf(stderr,"failed kernel_change: %s %s from %s "
-            "table %d metric %d dev %d via %s\n",
-            operation == ROUTE_ADD ? "add" :
-            operation == ROUTE_FLUSH ? "flush" :
-	    operation == ROUTE_MODIFY ? "modify" : "???",
-            format_prefix(dest, plen), format_prefix(src, src_plen),
-            newtable, newmetric, newifindex, format_address(newgate));
-	    }
-    }
-    return rc;
-
-}
-
-// Work in progress
-#endif
-
-#if 1
 
 int
 kernel_route(int operation, int table,
@@ -1486,7 +1237,6 @@ kernel_route(int operation, int table,
 		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
     return rc;
 }
-#endif
 
 static int
 parse_kernel_route_rta(struct rtmsg *rtm, int len, struct kernel_route *route)
