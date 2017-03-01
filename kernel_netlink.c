@@ -1089,6 +1089,7 @@ kernel_route(int operation, int table,
 	ifindex = newifindex;
 	metric = newmetric;
     }
+
     ipv4 = v4mapped(gate);
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
 
@@ -1101,7 +1102,7 @@ kernel_route(int operation, int table,
             table, metric, ifindex, format_address(gate));
 
     /* Unreachable default routes cause all sort of weird interactions;
-       ignore them. */
+       ignore them. FIXME - this is a bug elsewhere */
 
     if((metric >= KERNEL_INFINITY) &&
 	    (plen == 0 || (ipv4 && plen == 96)))
@@ -1183,7 +1184,11 @@ kernel_route(int operation, int table,
     } else {
 	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
     }
-
+    // When going to infinity this is all we need. Probably. Adding
+    // more confuses things
+    
+    if(rtm->rtm_type == RTN_UNREACHABLE) goto out;
+    
 //    PERHAPS one day push babel routes as expiring into the
 //    the kernel and periodically refresh them. This would
 //    give us a window to crash or restart in without retractions
@@ -1224,7 +1229,7 @@ kernel_route(int operation, int table,
     } else {
 	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
     }
-
+out:
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
     if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");
