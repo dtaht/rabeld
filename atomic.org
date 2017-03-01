@@ -1,3 +1,219 @@
+* I've seen things pass through "unreach" that probably shouldn't.
+
+Route retractions? what? I could be delusional. Need to write
+comprehensive tests....
+
+* TODO fix INFINITE handling
+
+We CAN have unreachable routes with the same metric babel uses.
+
+Babel insists on changing the metric, which doesn't help in some
+cases, and makes for switching back to be confusing and slow.
+
+root@dancer:~# ip route add unreachable 172.22.91.23/32 metric 2048
+root@dancer:~# ip route | grep unreach
+unreachable 172.22.91.23 metric 2048 
+
+root@dancer:~# ip route replace 172.22.91.23/32 dev eno1 metric 2048
+root@dancer:~# ip route | grep 172.22.91.23
+172.22.91.23 dev eno1 scope link metric 2048 
+
+Also - and probably importantly - if you have a reachable route
+with a higher metric and inflate the kernel metric, you fall back
+to that other route.... I think
+
+root@dancer:~# ip route replace unreachable 172.22.91.23/32
+root@dancer:~# ip route | grep 172.22.91.23
+unreachable 172.22.91.23 
+172.22.91.23 dev eno1 scope link metric 2048 
+
+root@dancer:~# ip route replace 172.22.91.23/32 dev eno1
+root@dancer:~# ip route | grep 172.22.91.23
+172.22.91.23 dev eno1 scope link 
+172.22.91.23 dev eno1 scope link metric 2048 
+
+root@dancer:~# ip route | grep 172.22.91.23
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+
+root@dancer:~# ip route replace unreachable 172.22.91.23/32 metric 2048
+unreachable 172.22.91.23 
+172.22.91.23 dev eno1 scope link metric 2048 
+
+* TODO write priority queue
+** Hellos have got to get out in time
+These essentially ack-clock the architecture
+If we are having trouble writing the kernel at all in the first place,
+we can get bottlenecked on route transfers blocking it.
+
+1 drop head hello queue, always outstanding, will make things better.
+
+** Possibly - route wildcard retractions also
+** Start expiring buffered routes in this case faster
+** Kernel global netlink change 
+can we flush or change all routes to a different oid in one go?
+
+* TODO write some nasty tests
+** UDP flood test vs route switches and interface up/down events
+** TCP flood test vs route switches
+
+* no src_prefix = src_plen == 0 == ugh
+
+I think src_plen == 255 would be a better choice and less confusing.
+it would have saved on the v4_mapped madness I just didn't understand
+and had to fix....
+
+It might be more confusing to use src_prefix, prefix, plen src_plen
+
+or to flip the whole comparison so the plens were first.
+
+Would like these to always be in the same order across all structs,
+and they have to be at least 8 byte (16 byte for SSE?) aligned....
+
+The neon can load 32 bytes at a time in a single instruction, also
+and reorder stuff on the way in and way out.
+struct kernel_route {
+    unsigned char prefix[16];
+    unsigned char src_prefix[16];
+    unsigned char plen; // FIXME: why were these ints?
+    unsigned char src_plen; /* no source prefix <=> src_plen == 0 */
+    unsigned char proto; // This is an unsigned char in the real world
+
+* TODO check all alignment issues
+
+* What is group?
+
+ip monitor link has 3 states that I've seen so far
+
+^C
+d@dancer:~/git/rabeld/tests/routing_table_of_death$ ip monitor link
+2: eno1: <BROADCAST,MULTICAST> mtu 1500 qdisc fq_codel state DOWN group default 
+    link/ether ec:a8:6b:fe:09:a2 brd ff:ff:ff:ff:ff:ff
+2: eno1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default 
+    link/ether ec:a8:6b:fe:09:a2 brd ff:ff:ff:ff:ff:ff
+2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default 
+    link/ether ec:a8:6b:fe:09:a2 brd ff:ff:ff:ff:ff:ff
+
+** TODO What is a "group"?
+It's nice to know we can see fq_codel on the interface this way...
+
+* Heh. Missing space
+
+d@dancer:~/git/rabeld/tests/routing_table_of_death$ ip monitor prefix
+prefix 2601:646:4101:a740::/64dev eno1 onlink autoconf valid 177984 preferred 177984 
+prefix fdaf:dc63:6de9:8::/64dev eno1 onlink autoconf valid 4294967295 preferred 4294967295 
+
+Not really sure what the prefix option does
+
+* Everything I know I've learned from iproute2
+
+If we *really* wanted to monitor individual events, perhaps
+it's possible here too.
+
+Anyway, the "lladdr" events come from ip monitor neigh
+
+d@dancer:~/git/rabeld/tests/routing_table_of_death$ ip monitor help
+Usage: ip monitor [ all | LISTofOBJECTS ] [ FILE ] [ label ] [all-nsid] [dev DEVICE]
+LISTofOBJECTS := link | address | route | mroute | prefix |
+                 neigh | netconf | rule | nsid
+FILE := file FILENAME
+d@dancer:~/git/rabeld/tests/routing_table_of_death$ ip monitor netconf
+^C
+d@dancer:~/git/rabeld/tests/routing_table_of_death$ ip monitor neigh
+
+
+
+* Looking at the down/up transition
+
+It's not clear to me that the kernel is deleting all these for me.
+
+I think it is, but should check. I'm also not using noprefixroute on this
+machine....
+
+Ideally there would be some way to tell the kernel that "if this interface goes
+down, switch all my routes to this interface"
+
+2: eno1: <BROADCAST,MULTICAST> mtu 1500 qdisc fq_codel state DOWN group default 
+    link/ether ec:a8:6b:fe:09:a2 brd ff:ff:ff:ff:ff:ff
+Deleted 224.0.0.251 dev eno1 lladdr 01:00:5e:00:00:fb NOARP
+Deleted 224.0.0.22 dev eno1 lladdr 01:00:5e:00:00:16 NOARP
+Deleted 239.255.255.250 dev eno1 lladdr 01:00:5e:7f:ff:fa NOARP
+Deleted 172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d REACHABLE
+Deleted 172.26.16.1 dev eno1 lladdr 30:b5:c2:75:7f:aa STALE
+Deleted ff02::1:6 dev eno1 lladdr 33:33:00:01:00:06 NOARP
+Deleted ff02::1:ffc9:3c08 dev eno1 lladdr 33:33:ff:c9:3c:08 NOARP
+Deleted ff02::1:ffef:3603 dev eno1 lladdr 33:33:ff:ef:36:03 NOARP
+Deleted ff02::16 dev eno1 lladdr 33:33:00:00:00:16 NOARP
+Deleted ff02::fb dev eno1 lladdr 33:33:00:00:00:fb NOARP
+Deleted ff02::1:fffe:9a2 dev eno1 lladdr 33:33:ff:fe:09:a2 NOARP
+Deleted ff02::2 dev eno1 lladdr 33:33:00:00:00:02 NOARP
+Deleted fe80::20d:b9ff:fe41:6c2d dev eno1 lladdr 00:0d:b9:41:6c:2d router STALE
+Deleted fe80::ba27:ebff:fec9:3c08 dev eno1 lladdr b8:27:eb:c9:3c:08 router STALE
+Deleted fe80::32b5:c2ff:fe75:7faa dev eno1 lladdr 30:b5:c2:75:7f:aa router REACHABLE
+Deleted default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted default from 2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted default from 2602:240::/28 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted 2601:646:4101:a740::/64 dev eno1 proto kernel metric 256 linkdown  expires 178494sec pref medium
+Deleted 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted 2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fdaf:dc63:6de9:8::/64 dev eno1 proto kernel metric 256 linkdown  pref medium
+Deleted fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024 linkdown  pref medium
+Deleted fe80::/64 dev eno1 proto kernel metric 256 linkdown  pref medium
+Deleted default via fe80::32b5:c2ff:fe75:7faa dev eno1 proto ra metric 1024 linkdown  expires 65210sec hoplimit 64 pref high
+Deleted ff00::/8 dev eno1 table local metric 256 linkdown  pref medium
+Deleted 2: eno1    inet6 fdaf:dc63:6de9:8:10e3:e060:52ef:3603/64 scope global temporary dynamic 
+       valid_lft 597346sec preferred_lft 78709sec
+Deleted local fdaf:dc63:6de9:8:10e3:e060:52ef:3603 dev lo table local proto unspec metric 0  pref medium
+Deleted 2: eno1    inet6 fdaf:dc63:6de9:8:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft forever preferred_lft forever
+Deleted local fdaf:dc63:6de9:8:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fdaf:dc63:6de9:8:eea8:6bff:fefe:9a2 dev lo table local proto unspec metric 0  pref medium
+Deleted 2: eno1    inet6 2601:646:4101:a740:10e3:e060:52ef:3603/64 scope global temporary dynamic 
+       valid_lft 178495sec preferred_lft 78709sec
+Deleted local 2601:646:4101:a740:10e3:e060:52ef:3603 dev lo table local proto unspec metric 0  pref medium
+Deleted 2: eno1    inet6 2601:646:4101:a740:eea8:6bff:fefe:9a2/64 scope global mngtmpaddr dynamic 
+       valid_lft 178495sec preferred_lft 178495sec
+Deleted local 2601:646:4101:a740:: dev lo table local proto unspec metric 0  pref medium
+Deleted local 2601:646:4101:a740:eea8:6bff:fefe:9a2 dev lo table local proto unspec metric 0  pref medium
+Deleted 2: eno1    inet6 fe80::eea8:6bff:fefe:9a2/64 scope link 
+       valid_lft forever preferred_lft forever
+Deleted local fe80:: dev lo table local proto unspec metric 0  pref medium
+Deleted local fe80::eea8:6bff:fefe:9a2 dev lo table local proto unspec metric 0  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel 
+
+
+* ip monitor messages
+
+I wonder if these are useful for anything, and if not, can
+they be filtered out?
+
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d PROBE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d REACHABLE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d STALE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d REACHABLE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d STALE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d PROBE
+172.26.16.5 dev eno1 lladdr 00:0d:b9:41:6c:2d REACHABLE
+fe80::32b5:c2ff:fe75:7faa dev eno1 lladdr 30:b5:c2:75:7f:aa router STALE
+
+We only get them when the link is essentially idle, babel multicast does not
+trigger it. If I flood the link with TCP packets I don't see it as often... I
+think.... I see it for ipv6 when not using ipv4... 
+
+fe80::20d:b9ff:fe41:6c2d dev eno1 lladdr 00:0d:b9:41:6c:2d router PROBE
+fe80::20d:b9ff:fe41:6c2d dev eno1 lladdr 00:0d:b9:41:6c:2d router REACHABLE
+
 * OK, it is obvious I should go write tests 
 
 if I'm going to muck with major internals.
