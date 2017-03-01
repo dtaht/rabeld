@@ -1,3 +1,80 @@
+* Nope, this version breaks ipv4 thoroughly.
+
+Was it merely a matter of luck?
+
+(probably long past time I rebooted this box)
+
+root@dancer:~/git/libv6/clients/ddpd# ip route
+default via 172.26.16.1 dev eno1 
+169.254.0.0/16 dev eno1 scope link metric 1000 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel 
+
+* 
+root@dancer:~/git/rabeld# ip route
+
+Along the way I lost eno1's route on it's interface
+
+default via 172.26.201.157 dev wlp2s0 proto babel 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+172.26.64.0/24 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.96.66 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel 
+172.26.200.0/22 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel 
+
+
+And I'd left APU2 down. Weildly it should have sent these along via wifi
+
+fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+That said - I know longer know where these came from???
+
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+172.26.96.103 via 172.26.201.157 dev wlp2s0 proto babel 
+Deleted 172.29.2.99 via 172.26.201.1 dev wlp2s0 proto babel 
+unreachable 172.29.2.99 proto babel 
+Deleted unreachable 172.29.2.99 proto babel 
+Deleted 172.26.96.103 via 172.26.201.157 dev wlp2s0 proto babel 
+unreachable 172.26.96.103 proto babel 
+Deleted unreachable 172.26.96.103 proto babel 
+
+
+** where does 103 connect??? why did I lose it?
+Where does 2.
+Hmm
+
+172.26.64.0/24 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.96.66 via 172.26.201.157 dev wlp2s0 proto babel 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel 
+default via 172.26.201.157 dev wlp2s0 proto babel 
+
+** 103 is the pi2
+
+root@pi2:~# ip route
+default via 172.26.96.1 dev wlan0  proto babel onlink 
+169.254.0.0/16 dev wlan0  proto kernel  scope link  src 169.254.22.140  metric 303 
+172.26.16.0/24 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.20.0/24 dev eth0  proto kernel  scope link  src 172.26.20.127  metric 202 
+172.26.20.0/22 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.64.0/24 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.96.64 via 172.26.96.1 dev wlan0  proto babel onlink 
+172.26.96.66 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.96.100 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.130.0/23 via 172.26.20.1 dev eth0  proto babel onlink 
+172.26.200.0/22 via 172.26.96.1 dev wlan0  proto babel onlink 
+172.29.2.99 via 172.26.20.1 dev eth0  proto babel onlink 
+198.27.232.0/22 via 172.26.20.1 dev eth0  proto babel onlink 
+
+
 * I must be underthinking this
 
 if I can't move a route from infinity to useful it must because it depends on
