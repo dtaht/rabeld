@@ -1,3 +1,11 @@
+* The only positive thing
+
+is that I managed to preserve the 1024 kernel metric for infinity.
+
+And I really do like seeing the atomic updates work as before.
+So much easier to read the ip monitor output and so much better 
+on the overall netwokrs
+
 * I'm just making it worse for myself
 
 So this time I broke ipv4
