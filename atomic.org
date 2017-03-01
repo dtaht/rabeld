@@ -1,3 +1,107 @@
+* I have to look at this closer but:
+Even if I was getting it right elsewhere, higher up babel gets the phasing
+wrong. I think. Anyway, this version ALSO ends up with stauck routtes
+
+unreach to reach once here
+
+metric is: 65535
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::7ec7:9ff:fede:2bb5
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+
+while this goes unreach
+
+metric is: 0
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::20d:b9ff:fe41:6c2d
+    ifindex  = 2
+ newifindex  = 2
+    metric   = 0
+ newmetric   = 65535
+
+metric is: 65535
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::20d:b9ff:fe41:6c2d
+    ifindex  = 2
+ newifindex  = 2
+    metric   = 0
+ newmetric   = 65535
+metric is: 65535
+
+On the way to reachable
+
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::16cc:20ff:fee5:64c1
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+
+metric is: 0
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::16cc:20ff:fee5:64c1
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+
+metric is: 0
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::16cc:20ff:fee5:64c1
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+metric is: 0
+
+
+* Phase
+metric is: 0
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::16cc:20ff:fee5:64c1
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+metric is: 0
+modify table = 254
+    newtable = 254
+       gate  = fe80::20d:b9ff:fe41:6c2d
+    newgate  = fe80::16cc:20ff:fee5:64c1
+    ifindex  = 2
+ newifindex  = 3
+    metric   = 65535
+ newmetric   = 0
+metric is: 0
+
+
+
+* Issuing an ip route 
+
+ended up sending a bunch of martian
+prefixes. Or it could have been co-incidence
+or it could be because we are listening on that kind of
+event (and we don't need to)
+
+* notes
+
 iproute.c:		if ((r->rtm_scope != RT_SCOPE_UNIVERSE || show_details > 0) && filter.scopemask != -1)
 iproute.c:			fprintf(fp, "scope %s ", rtnl_rtscope_n2a(r->rtm_scope, b1, sizeof(b1)));
 iproute.c:		.r.rtm_scope = RT_SCOPE_NOWHERE,

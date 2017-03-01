@@ -1095,13 +1095,14 @@ kernel_route(int operation, int table,
 	    // Is it possible we are getting a nonsensical anything?
 	    fprintf(stderr,"modify table = %d\n"
 		           "    newtable = %d\n"
-		           "       gate  = %d\n"
-		           "    newgate  = %d\n"
+		           "       gate  = %s\n"
+		           "    newgate  = %s\n"
 		           "    ifindex  = %d\n"
 		           " newifindex  = %d\n"
 		           "    metric   = %d\n"
 		    " newmetric   = %d\n",
-		    table, newtable, gate,newgate, ifindex,newifindex,metric,newmetric);
+		    table, newtable, format_address(gate), format_address(newgate),
+		    ifindex, newifindex, metric, newmetric);
 	table = newtable;
 	gate = newgate;
 	ifindex = newifindex;
@@ -1127,7 +1128,9 @@ kernel_route(int operation, int table,
     memset(buf.raw, 0, sizeof(buf.raw));
 
     // The old behavior used NLM_EXCLU and NOT REPLACE
-
+    // When creating an unreachable route should we just replace?
+    // What happens if the kernel flushes for us?
+    
     if(operation == ROUTE_FLUSH) {
 	buf.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_REPLACE; // NLM_EXCL?
         buf.nh.nlmsg_type = RTM_DELROUTE;
@@ -1138,9 +1141,11 @@ kernel_route(int operation, int table,
 
     rtm = NLMSG_DATA(&buf.nh);
     rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
-    rtm->rtm_dst_len = ipv4 ? plen - 96 : plen;
+    rtm->rtm_dst_len = ipv4 ? plen - 96 : plen; // Did I do something bad here?
+    
     if(use_src)
-        rtm->rtm_src_len = src_plen;
+	    rtm->rtm_src_len = src_plen; // where is this initialized?
+
     rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE; // FIXME: NOT SURE ABOUT THIS
     if(metric < KERNEL_INFINITY)
@@ -1149,7 +1154,7 @@ kernel_route(int operation, int table,
         rtm->rtm_type = RTN_UNREACHABLE;
 
     rtm->rtm_protocol = RTPROT_BABEL;
-    rtm->rtm_flags |= RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
+    rtm->rtm_flags &= ~RTNH_F_ONLINK; // FIXME: NOT SURE ABOUT THIS
 
 // http://lxr.free-electrons.com/source/net/ipv4/fib_semantics.c#L739
 
