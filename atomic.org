@@ -1,3 +1,115 @@
+* Anyway, I do get unreach with the right metric
+
+unreachable 172.26.64.0/24 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel onlink 
+
+committing this version
+
+* So I take down my default gateway
+
+and I stay stuck on that route for a long time. Tho that box should
+have issued a retract of some sort.... it falls back to my other route 16 sec
+later....
+
+hmm... am I not detecting link down on that box? no -l is enabled...
+
+* So I take down my default gateway
+
+and my defuault route does not change, even though I have more than a few other
+devices supplying one. I THINK. No. I took down the wrong interface.
+
+default via 172.26.16.5 dev eno1 proto babel onlink 
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+Deleted 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+Deleted unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+Deleted unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted 172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel onlink 
+Deleted unreachable 172.26.200.0/22 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+Deleted fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+Deleted unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+
+
+* 64.0 is the other side of an ethernet router.
+Why do we pass through the wifi first?
+
+Deleted unreachable 172.26.130.0/23 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable 172.26.200.0/22 proto babel onlink 
+172.26.200.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable 172.29.2.99 proto babel onlink 
+172.29.2.99 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable 198.27.232.0/22 proto babel onlink 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+Deleted unreachable 2601:646:4101:a740::/60 dev lo proto babel metric 1024  error -113 pref medium
+2601:646:4101:a740::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+2602:24c:61be:86e0::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd69:3860:b137::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd69:3860:b137::/48 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd99::4 dev lo proto babel metric 1024  error -113 pref medium
+fd99::4 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd99::10 dev lo proto babel metric 1024  error -113 pref medium
+fd99::10 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+fd99::66 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+Deleted unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+fde8:9cb6:b42e::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::10 via fe80::ba27:ebff:fec9:3c08 dev eno1 proto babel metric 1024  pref medium
+
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+fd69:3860:b137::/48 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+fd99::4 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+default from 2601:646:4101:a740::/60 via fe80::32b5:c2ff:fe75:7faa dev eno1 proto babel metric 1024  pref medium
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+default from 2602:240::/28 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default from 2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default from 2602:240::/28 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+default from 2602:24c:61be:86e0::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.66 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fd99::66 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+default from 2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+
+
 * I've seen things pass through "unreach" that probably shouldn't.
 
 Route retractions? what? I could be delusional. Need to write
