@@ -1100,8 +1100,9 @@ kernel_route(int operation, int table,
 	// Hmm. Can we do better on infinity here? Why would the gates
 	// OR ifindex be the same on infinity? They could change...
 
-        if(newmetric == metric && metric >= KERNEL_INFINITY)
-            return 0;
+	// This change busted ipv4 and shouldn't have
+//        if(newmetric == metric && metric >= KERNEL_INFINITY)
+//            return 0;
 
 	
 	// Is it possible we are getting a nonsensical anything?
