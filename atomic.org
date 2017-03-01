@@ -1,3 +1,12 @@
+* TODO Tomorrow's plan
+
+log (separately) the ip route equivalent commands to what I think I'm issuing.
+That way I can replay them independently and also verify what's going on.
+
+install better error checking.
+
+If anyone is reading this. Don't use this version.
+
 * I reverted all the way back to 4451fddeee8e2920481097bee91e28a866f99014
 
 which had what I thought was the "extra" magic gateway setup in it.
