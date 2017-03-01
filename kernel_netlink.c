@@ -1029,6 +1029,7 @@ void print_failed_netlink(char *s, int operation, int table, int metric, int dev
 // The way this gets called is confusing
 // "newgate" is only used on a change or replace
 // otherwise add/del uses the first parameters only
+// is this actually true?
 
 const int iflo = 0; // fixme find this
 
@@ -1092,7 +1093,18 @@ kernel_route(int operation, int table,
             table, metric, ifindex, format_address(gate));
 
     if(operation == ROUTE_MODIFY) {
-	    // Is it possible we are getting a nonsensical anything?
+        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
+           newifindex == ifindex)
+            return 0;
+
+	// Hmm. Can we do better on infinity here? Why would the gates
+	// OR ifindex be the same on infinity? They could change...
+
+        if(newmetric == metric && metric >= KERNEL_INFINITY)
+            return 0;
+
+	
+	// Is it possible we are getting a nonsensical anything?
 	    fprintf(stderr,"modify table = %d\n"
 		           "    newtable = %d\n"
 		           "       gate  = %s\n"
@@ -1103,6 +1115,7 @@ kernel_route(int operation, int table,
 		    " newmetric   = %d\n",
 		    table, newtable, format_address(gate), format_address(newgate),
 		    ifindex, newifindex, metric, newmetric);
+	    // What info am I losing in this transition?
 	table = newtable;
 	gate = newgate;
 	ifindex = newifindex;
@@ -1111,6 +1124,7 @@ kernel_route(int operation, int table,
 
     ipv4 = v4mapped(gate);
     // ?? src_plen of 0 means what?
+
     if(src_plen > 127) fprintf(stdout, "Plen = %d WTF\n", src_plen);
 
     use_src = (src_plen != 0 && kernel_disambiguate(ipv4));
@@ -1140,14 +1154,16 @@ kernel_route(int operation, int table,
     }
 
     rtm = NLMSG_DATA(&buf.nh);
+    
     rtm->rtm_family = ipv4 ? AF_INET : AF_INET6;
     rtm->rtm_dst_len = ipv4 ? plen - 96 : plen; // Did I do something bad here?
     
     if(use_src)
-	    rtm->rtm_src_len = src_plen; // where is this initialized?
+	    rtm->rtm_src_len = src_plen; // this is initialized to zero. IS THAT RIGHT?
 
     rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE; // FIXME: NOT SURE ABOUT THIS
+
     if(metric < KERNEL_INFINITY)
         rtm->rtm_type = RTN_UNICAST;
     else
@@ -1185,7 +1201,7 @@ kernel_route(int operation, int table,
    fprintf(stderr,"metric is: %d\n", metric);
     // AHAH - metric can be unsigned. So like -2 is?? 
 
-   if(metric != KERNEL_INFINITY) {
+   if(rtm->rtm_type == RTN_UNICAST) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
         rta->rta_type = RTA_PRIORITY;

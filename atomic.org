@@ -1,6 +1,136 @@
+* I'm just making it worse for myself
+
+So this time I broke ipv4
+
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+Deleted unreachable 172.26.16.0/24 proto babel 
+Deleted unreachable 172.26.20.0/22 proto babel 
+Deleted unreachable 172.26.96.100 proto babel 
+Deleted unreachable 172.26.96.103 proto babel 
+Deleted unreachable 172.29.2.99 proto babel 
+
+root@dancer:~/git/libv6/clients/ddpd# 
+root@dancer:~/git/libv6/clients/ddpd# ip route
+default via 172.26.201.1 dev wlp2s0 proto babel 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+unreachable 172.22.91.93 proto gated metric 2048 
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel 
+172.26.96.66 via 172.26.201.1 dev wlp2s0 proto babel 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel 
+
+
+root@dancer:~/git/libv6/clients/ddpd# echo dump | nc ::1 33123 | grep .100
+add route 1bcefc0 prefix 172.26.96.100/32 from ::/0 installed yes id 12:0d:7f:ff:fe:64:c9:91 metric 65535 refmetric 65535 via fe80::7ec7:9ff:fede:2bb5 expires 0 if wlp2s0
+add route 1bd04f0 prefix 172.26.96.100/32 from ::/0 installed no id 12:0d:7f:ff:fe:64:c9:91 metric 512 refmetric 256 via fe80::32b5:c2ff:fe75:7faa expires 0 if eno1
+add route 1bcf100 prefix fde8:9cb6:b42e::/60 from ::/0 installed no id c2:56:27:ff:fe:6c:95:3f metric 192 refmetric 96 via fe80::20d:b9ff:fe41:6c2d expires 0 if eno1
+
+
+* And 113 is normal for ipv6
+
+ipv4 and ipv6 are different
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route add unreachable fd11::/60 
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route del unreachable fd11::/60 
+root@dancer:~/git/libv6/clients/ddpd# 
+
+unreachable fd11::/60 dev lo metric 1024  error -113 pref medium
+
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route add unreachable fd11::/60 
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route del unreachable fd11::/60 
+root@dancer:~/git/libv6/clients/ddpd# 
+
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route add unreachable fd11::/60 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route add unreachable fd11::/60 metric 1044
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 dev eno1 metric 1044
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route flush fd11::/64
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+fd11::/60 dev eno1 metric 1024  pref medium
+fd11::/60 dev eno1 metric 1044  pref medium
+unreachable fd11::/60 dev lo metric 2048  error -113 pref medium
+
+** To capture that better:
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+fd11::/60 dev eno1 metric 1024  pref medium
+fd11::/60 dev eno1 metric 1044  pref medium
+unreachable fd11::/60 dev lo metric 2048  error -113 pref medium
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route flush fd11::/64
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+fd11::/60 dev eno1 metric 1024  pref medium
+fd11::/60 dev eno1 metric 1044  pref medium
+unreachable fd11::/60 dev lo metric 2048  error -113 pref medium
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route delete fd11::/60 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+fd11::/60 dev eno1 metric 1024  pref medium
+fd11::/60 dev eno1 metric 1044  pref medium
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route delete fd11::/60 metric 1024
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route delete fd11::/60 metric 1044
+root@dancer:~/git/libv6/clients/ddpd# 
+
+** So this is what I want to have happen
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 dev wlp2s0 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace unreachable fd11::/60 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 dev eno1
+metric 2048
+
+THIS TOTALLY WORKS IN IPROUTE2. 
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace unreachable fd11::/60 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+unreachable fd11::/60 dev lo metric 2048  error -113 pref medium
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route | grep fd11
+fd11::/60 dev eno1 metric 2048  pref medium
+
+** Try again
+
+Hmm.
+
+fe80::16cc:20ff:fee5:64c1
+
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace unreachable fd11::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# 
+
+
+all worked.
+
+** Try src specific... works
+
+root@dancer:~/git/libv6/clients/ddpd# 
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace unreachable fd11::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route del fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace from fd99::/32 fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace from fd99::/32 unreachable fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048
+root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace from fd99::/32 unreachable fd11::/60 dev wlp2s0 metric 2048root@dancer:~/git/libv6/clients/ddpd# ip -6 route replace from fd99::/32 fd11::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 metric 2048root@dancer:~/git/libv6/clients/ddpd# 
+
+WTF am I doing wrong in babel?
+
 * I have to look at this closer but:
 Even if I was getting it right elsewhere, higher up babel gets the phasing
 wrong. I think. Anyway, this version ALSO ends up with stauck routtes
+fr ipv6
 
 unreach to reach once here
 
