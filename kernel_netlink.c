@@ -1141,82 +1141,32 @@ kernel_route(int operation, int table,
 // What is (RTNH_F_PERVASIVE?
     rta = RTM_RTA(rtm);
 
-    if(ipv4) {
+   if(ipv4) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
         rta->rta_type = RTA_DST;
         memcpy(RTA_DATA(rta), dest + 12, sizeof(struct in_addr));
     } else {
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = RTA_DST;
+        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
         if(use_src) {
             rta = RTA_NEXT(rta, len);
             rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
             rta->rta_type = RTA_SRC;
             memcpy(RTA_DATA(rta), src, sizeof(struct in6_addr));
         }
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-        rta->rta_type = RTA_DST;
-        memcpy(RTA_DATA(rta), dest, sizeof(struct in6_addr));
     }
 
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    rta->rta_type = RTA_PRIORITY;
-
-    if(ipv4) {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate + 12, sizeof(struct in_addr));
-    } else {
-            rta = RTA_NEXT(rta, len);
-            rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
-            rta->rta_type = RTA_GATEWAY;
-            memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
-    }
-
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-
-    if(metric < KERNEL_INFINITY) {
-        *(int*)RTA_DATA(rta) = metric;
+   fprintf(stderr,"metric is: %d\n", metric);
+    // AHAH - metric can be unsigned. So like -2 is?? 
+    if(metric != KERNEL_INFINITY) {
         rta = RTA_NEXT(rta, len);
         rta->rta_len = RTA_LENGTH(sizeof(int));
-        rta->rta_type = RTA_OIF;
-        *(int*)RTA_DATA(rta) = ifindex;
-    } else {
-        *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
-    }
-    // When going to infinity this is all we need. Probably. Adding
-    // more confuses things
-    
-    if(rtm->rtm_type == RTN_UNREACHABLE) goto out;
-    
-//    PERHAPS one day push babel routes as expiring into the
-//    the kernel and periodically refresh them. This would
-//    give us a window to crash or restart in without retractions
-//    and also let us chew up compute. On the other hand, we
-//    end up writing stuff to the kernel more often to refresh it.
+        rta->rta_type = RTA_PRIORITY;
 
-#ifdef HAVE_EXPIRES
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    rta->rta_type = RTA_EXPIRES;
-    memcpy(RTA_DATA(rta), &expires, sizeof(int));
-#endif
-    rta = RTA_NEXT(rta, len);
-    rta->rta_len = RTA_LENGTH(sizeof(int));
-    rta->rta_type = RTA_PRIORITY;
-
-    // I still feel I was on drugs when I wrote this originally
-    // We're doing the same work, twice... but it worked....
-
-    if(metric < KERNEL_INFINITY) {
         *(int*)RTA_DATA(rta) = metric;
-        rta = RTA_NEXT(rta, len);
-        rta->rta_len = RTA_LENGTH(sizeof(int));
-        rta->rta_type = RTA_OIF;
-        *(int*)RTA_DATA(rta) = ifindex;
 
         if(ipv4) {
             rta = RTA_NEXT(rta, len);
@@ -1229,10 +1179,36 @@ kernel_route(int operation, int table,
             rta->rta_type = RTA_GATEWAY;
             memcpy(RTA_DATA(rta), gate, sizeof(struct in6_addr));
         }
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = ifindex;
+
     } else {
-	    *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
+        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_PRIORITY;
+       *(int*)RTA_DATA(rta) = ipv4 ? ipv4_metric : ipv6_metric;
+
+/*        rta = RTA_NEXT(rta, len);
+        rta->rta_len = RTA_LENGTH(sizeof(int));
+        rta->rta_type = RTA_OIF;
+        *(int*)RTA_DATA(rta) = 0; // UNSPEC? */
     }
-out:
+
+//    PERHAPS one day push babel routes as expiring into the
+//    the kernel and periodically refresh them. This would
+//    give us a window to crash or restart in without retractions
+//    and also let us chew up compute. On the other hand, we
+//    end up writing stuff to the kernel more often to refresh it.
+
+#ifdef HAVE_EXPIRES
+    rta = RTA_NEXT(rta, len);
+    rta->rta_len = RTA_LENGTH(sizeof(int));
+    rta->rta_type = RTA_EXPIRES;
+    memcpy(RTA_DATA(rta), &expires, sizeof(int));
+#endif
+
     buf.nh.nlmsg_len = (char*)rta + rta->rta_len - buf.raw;
     if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"We scribbled on rtm_protocol!!!\n");

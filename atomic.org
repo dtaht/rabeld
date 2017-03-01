@@ -1,3 +1,133 @@
+* OK, I give up.
+
+Time to look hard at whatever ip route does.
+
+
+* IPv4 passes through that unreachable state
+
+It doesn't need to. There's a perfectly good alterative route available.
+
+d@dancer:~/git/libv6/clients/ddpd$ ip route
+default via 172.26.16.5 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+unreachable 172.22.91.93 proto gated metric 2048 
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.64 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.66 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+d@dancer:~/git/libv6/clients/ddpd$ ip route
+default via 172.26.16.1 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+unreachable 172.22.91.93 proto gated metric 2048 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel onlink 
+d@dancer:~/git/libv6/clients/ddpd$ ip route
+default via 172.26.16.1 dev eno1 proto babel onlink 
+169.254.0.0/16 dev wlp2s0 scope link metric 1000 
+unreachable 172.22.91.23 
+unreachable 172.22.91.23 metric 2048 
+unreachable 172.22.91.93 proto gated metric 2048 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.20.0/22 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.64.0/24 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.66 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.96.100 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.96.103 via 172.26.16.1 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.201.0/24 dev wlp2s0 proto kernel scope link src 172.26.201.244 
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+198.27.232.0/22 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+
+
+* And
+
+172.29.2.99 via 172.26.16.4 dev eno1 proto babel onlink 
+172.26.64.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.96.66 via 172.26.16.5 dev eno1 proto babel onlink 
+172.26.130.0/23 via 172.26.16.5 dev eno1 proto babel onlink 
+fd99::66 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.96.64 via 172.26.16.5 dev eno1 proto babel onlink 
+fd99::64 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.16.0/24 via 172.26.16.5 dev eno1 proto babel onlink 
+default via 172.26.16.5 dev eno1 proto babel onlink 
+
+
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+fd32:7d58:8d63::/48 via fe80::20d:b9ff:fe41:6c2d dev eno1 proto babel metric 1024  pref medium
+172.26.200.0/22 via 172.26.16.5 dev eno1 proto babel onlink 
+
+** We go down...
+
+
+unreachable 2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2406:da00:ff00::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable 2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 dev lo proto babel metric 1024  error -113 pref medium
+2620:0:ef0::/48 from 2600:3c01:e001:9300::/56 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+default via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.16.0/24 proto babel onlink 
+172.26.16.0/24 via 172.26.16.1 dev eno1 proto babel onlink 
+unreachable 172.26.64.0/24 proto babel onlink 
+unreachable 172.26.96.64 proto babel onlink 
+172.26.96.64 via 172.26.201.157 dev wlp2s0 proto babel onlink 
+unreachable 172.26.96.66 proto babel onlink 
+unreachable 172.26.130.0/23 proto babel onlink 
+unreachable 172.26.200.0/22 proto babel onlink 
+172.26.200.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+unreachable 198.27.232.0/22 proto babel onlink 
+unreachable 2602:24c:61be:86e0::/60 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fd32:7d58:8d63::/48 dev lo proto babel metric 1024  error -113 pref medium
+fd32:7d58:8d63::/48 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::64 dev lo proto babel metric 1024  error -113 pref medium
+fd99::64 via fe80::7ec7:9ff:fede:2bb5 dev wlp2s0 proto babel metric 1024  pref medium
+unreachable fd99::66 dev lo proto babel metric 1024  error -113 pref medium
+unreachable fde8:9cb6:b42e::/60 dev lo proto babel metric 1024  error -113 pref medium
+172.26.64.0/24 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+172.26.130.0/23 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+fd99::66 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+172.26.96.66 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+2602:24c:61be:86e0::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+fde8:9cb6:b42e::/60 via fe80::16cc:20ff:fee5:64c1 dev wlp2s0 proto babel metric 1024  pref medium
+198.27.232.0/22 via 172.26.201.1 dev wlp2s0 proto babel onlink 
+** We come back up
+
+and things are still hosed for ipv6, but not ipv4.
+
+But the code is cleaner
+
+* Well, no, I was editing the wrong code entirely
+
+I still don't understand why this is in here twice.
+
+Lets fix that.
+
 * So this time
 
 I'm not sending an oif to go unreach.
