@@ -301,9 +301,28 @@ netlink_socket(struct netlink *nl, uint32_t groups)
 
 #ifdef REPLAY_IPROUTE
 
+static FILE *iproutefd = NULL;
+
 // FIXME: make now a global. We don't need to get or format it every time
 // and we're trying to recreate hairy race conditions here.
 // Hmm. I wonder if we could do multipath with a /whatever on the newgate
+
+int replay_iproute_status(int rc, int errv) {
+	static int err = 0;
+	int errno_safe = errno;
+	if(err != 0) return -1; // Don't try to reopen the file
+	if(iproutefd == NULL) {
+		iproutefd = fopen("/tmp/babel_replay.log","a+");
+      		if(iproutefd == NULL) { err++; return -1; }
+	}
+	if(errno == 0) {
+		fprintf(iproutefd, " # OK\n");
+	} else {
+		fprintf(iproutefd, " # rc=%d errno=%d\n", rc, errv);
+	}
+        errno = errno_safe;
+	return rc;
+}
 
 int replay_iproute(int operation, const unsigned char *src, const unsigned char *dest,
  		   unsigned char src_plen, unsigned char dest_plen,
@@ -311,7 +330,6 @@ int replay_iproute(int operation, const unsigned char *src, const unsigned char 
  		   const unsigned char *newgate, int newtable, int newmetric, int newifindex)
 {
 
-        static FILE *iproutefd = NULL;
 	static int err = 0;
 	if(err != 0) return -1; // Don't try to reopen the file
 	if(iproutefd == NULL) {
@@ -322,7 +340,7 @@ int replay_iproute(int operation, const unsigned char *src, const unsigned char 
 	// FIXME: add timestamps
 	char ifname[256];
 	fprintf(iproutefd, "ip route %s %s from %s "
-            "table %d metric %d dev %s via %s\n",
+            "table %d metric %d dev %s via %s",
             operation == ROUTE_ADD ? "add" :
             operation == ROUTE_FLUSH ? "flush" :
 	    operation == ROUTE_MODIFY ? "replace" : "???",
@@ -333,6 +351,7 @@ int replay_iproute(int operation, const unsigned char *src, const unsigned char 
 }
 
 #else
+int replay_iproute_status(int rc, int errv) { return 0; }
 int replay_iproute(int operation, const unsigned char *src, const unsigned char *dest,
  		   const unsigned char src_plen, const unsigned char dest_plen,
 		   const unsigned char *gate,	int table, int metric, int ifindex,
@@ -1336,6 +1355,7 @@ kernel_route(int operation, int table,
     rc = netlink_talk(&buf.nh);
     if(rtm->rtm_protocol != RTPROT_BABEL)
 		fprintf(stderr,"Netlink scribbled on rtm_protocol!!!\n");
+    replay_iproute_status(rc, errno);
     return rc;
 }
 
