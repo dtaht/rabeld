@@ -299,6 +299,48 @@ netlink_socket(struct netlink *nl, uint32_t groups)
     }
 }
 
+#ifdef REPLAY_IPROUTE
+
+// FIXME: make now a global. We don't need to get or format it every time
+// and we're trying to recreate hairy race conditions here.
+// Hmm. I wonder if we could do multipath with a /whatever on the newgate
+
+int replay_iproute(int operation, const unsigned char *src, const unsigned char *dest,
+ 		   unsigned char src_plen, unsigned char dest_plen,
+		   const unsigned char *gate,	int table, int metric, int ifindex,
+ 		   const unsigned char *newgate, int newtable, int newmetric, int newifindex)
+{
+
+        static FILE *iproutefd = NULL;
+	static int err = 0;
+	if(err != 0) return -1; // Don't try to reopen the file
+	if(iproutefd == NULL) {
+		iproutefd = fopen("/tmp/babel_replay.log","a+");
+      		if(iproutefd == NULL) { err++; return -1; }
+	}
+
+	// FIXME: add timestamps
+	char ifname[256];
+	fprintf(iproutefd, "ip route %s %s from %s "
+            "table %d metric %d dev %s via %s\n",
+            operation == ROUTE_ADD ? "add" :
+            operation == ROUTE_FLUSH ? "flush" :
+	    operation == ROUTE_MODIFY ? "replace" : "???",
+            format_prefix(dest, dest_plen), format_prefix(src, src_plen),
+		table, metric, if_indextoname(ifindex,ifname), format_address(gate));
+	return 0;
+
+}
+
+#else
+int replay_iproute(int operation, const unsigned char *src, const unsigned char *dest,
+ 		   const unsigned char src_plen, const unsigned char dest_plen,
+		   const unsigned char *gate,	int table, int metric, int ifindex,
+		const unsigned char *newgate, int newtable, int newmetric, int newifindex) {
+   	return 0;
+}
+#endif
+
 static int
 netlink_read(struct netlink *nl, struct netlink *nl_ignore, int answer,
              struct kernel_filter *filter)
@@ -1092,6 +1134,11 @@ kernel_route(int operation, int table,
             format_prefix(dest, plen), format_prefix(src, src_plen),
             table, metric, ifindex, format_address(gate));
 
+    // Is it possible we are getting a nonsensical anything?
+    replay_iproute(operation, src, dest, src_plen, plen,
+	           gate, table, metric, ifindex,
+	           newgate, newtable, newmetric, newifindex);
+
     if(operation == ROUTE_MODIFY) {
 //        if(newmetric == metric && memcmp(newgate, gate, 16) == 0 &&
 //           newifindex == ifindex)
@@ -1107,7 +1154,7 @@ kernel_route(int operation, int table,
 	// This was the code I had working correctly this
 	// morning. Or I hope it was.
 
-	
+
         // clear out the old route
         // Going from infinite to normal
         // going from normal to infinite
@@ -1120,17 +1167,6 @@ kernel_route(int operation, int table,
                      if(rc!=0) fprintf(stderr,"Flushing infinite route failed\n");
             }
 
-	// Is it possible we are getting a nonsensical anything?
-	    fprintf(stderr,"modify table = %d\n"
-		           "    newtable = %d\n"
-		           "       gate  = %s\n"
-		           "    newgate  = %s\n"
-		           "    ifindex  = %d\n"
-		           " newifindex  = %d\n"
-		           "    metric   = %d\n"
-		    " newmetric   = %d\n",
-		    table, newtable, format_address(gate), format_address(newgate),
-		    ifindex, newifindex, metric, newmetric);
 	    // What info am I losing in this transition?
 	table = newtable;
 	gate = newgate;
