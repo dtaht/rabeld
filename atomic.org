@@ -1,9 +1,71 @@
-* TODO Tomorrow's plan
+* I am still trying to wrap my head around the zone concept
+
+
+
+* Idea - simplify all other logic
+
+Always do a modify elsewhere which is an implied add.
+a flush is a flush.
+
+It turns out we only call route_add once
+
+And adding that to my existing busted code wroked for ipov6 but failed
+completely on ipv4.
+
+We only call route modify 3 times.
+
+* Also make sure I have the network back in a consistent state
+
+pi2 is busted for sure. apu also.
+
+* DONE Tomorrow's plan
 
 log (separately) the ip route equivalent commands to what I think I'm issuing.
 That way I can replay them independently and also verify what's going on.
 
-install better error checking.
+Basically done. Current, basically borken sequence of events is:
+
+MUCH simpler than debugging netlink, except this doesn't match in the from
+or on the replace stuff. Yet.
+
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add fd69:3860:b137::/48 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route add 172.26.96.100/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.20.0/22 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 2601:646:4101:a740::/60 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route add ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route add 172.26.16.0/24 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 0.0.0.0/0 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add fd99::4/128 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route add 172.26.96.103/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add fd99::10/128 from ::/0 table 254 metric 0 dev eno1 via fe80::ba27:ebff:fec9:3c08
+ip route add 172.29.2.99/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.235
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.29.2.99/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.235
+ip route add 172.26.96.100/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.20.0/22 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.16.0/24 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 0.0.0.0/0 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.96.103/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.96.103/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.22.148.9/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.5
+ip route add 172.26.96.100/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.20.0/22 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.16.0/24 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 0.0.0.0/0 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route add 172.26.96.103/32 from ::/0 table 254 metric 0 dev eno1 via 172.26.16.1
+ip route flush fd99::10/128 from ::/0 table 254 metric 0 dev eno1 via fe80::ba27:ebff:fec9:3c08
+ip route flush fd99::4/128 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route flush fd69:3860:b137::/48 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route flush 2601:646:4101:a740::/60 from ::/0 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+ip route flush ::/0 from 2601:646:4101:a740::/60 table 254 metric 0 dev eno1 via fe80::32b5:c2ff:fe75:7faa
+
+
+* install better error checking.
 
 If anyone is reading this. Don't use this version.
 
