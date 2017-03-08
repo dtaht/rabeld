@@ -1,3 +1,28 @@
+* Endian
+
+https://gcc.gnu.org/ml/gcc-patches/2010-06/msg00409.html
+
+http://hardwarebug.org/2010/07/06/arm-inline-asm-secrets/
+
+https://www.xilinx.com/support/documentation/application_notes/xapp1206-boost-sw-performance-zynq7soc-w-neon.pdf
+
+-mvectorize-with-neon-quad.
+
+-mcpu=cortex-a9.
+
+Note: the iteration count as a multiple of four is only an example. In fact, it should be a multiple of the
+number of lanes in a vector. For example, if you plan to use the NEON Quad-word register and the
+data type is 32-bit float, an iteration count with a multiple of 4 is desired, as indicated by masking off
+the 2 low bits as shown in the next code snippet (page 15).
+The requirement to have fixed iteration count or iteration count decid
+
+* Load/store 64 bytes at a time:
+
+
+: vldm r1!,{q0-q3}; vstm r0!,{q0-q3}; subs r2,r2,#64; bne 1b
+
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=43725
+
 * Hmm... can I use popcount for anything?
 
 or popcount | plen << 8? It's *way* cheaper than a hash, and the initial
@@ -6,6 +31,8 @@ distribution of routes in the first place.
 
 Instead of depending on the plen could I reverse the count leading zeros
 stuff?
+
+https://www.raspberrypi.org/forums/viewtopic.php?f=63&t=134825
 
 popcount is a free instruction on later SSE more or less
 
