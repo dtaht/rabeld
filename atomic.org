@@ -1,6 +1,36 @@
+* Hmm... can I use popcount for anything?
+
+or popcount | plen << 8? It's *way* cheaper than a hash, and the initial
+table lookup is very wide. Can I get covering routes this way? What's the
+distribution of routes in the first place.
+
+Instead of depending on the plen could I reverse the count leading zeros
+stuff?
+
+popcount is a free instruction on later SSE more or less
+
+https://gmplib.org/list-archives/gmp-devel/2013-February/002892.html
+
+Neon has:
+
+VCNT (Vector Count set bits) counts the number of bits that are one in each
+element in a vector, and places the results in a second vector.
+which then becomes a horizontal add, add to get back the total result.x
+
+And for mips...
+
+See MIPS Run by Dominic Sweetman
+
+http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+
+
+* DONE I had a plan...
+I spent a few hours writing up a plan for merging changes 
+and I can't find it now.
+** I'd put it in an unmerged repo
+** TODO commit it somewhere
+
 * I am still trying to wrap my head around the zone concept
-
-
 
 * Idea - simplify all other logic
 
